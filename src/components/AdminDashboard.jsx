@@ -1,0 +1,916 @@
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useAppContext } from '../context/AppContext';
+import { LogOut, CheckCircle2, KeyRound, UserPlus, Trash2, ChevronDown, ChevronUp, BookOpen, Wrench, Calendar, X, Scale, BellRing, Sheet, Loader2, ExternalLink } from 'lucide-react';
+import { db } from '../firebase';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { GOOGLE_CLIENT_ID, GOOGLE_SHEETS_SCOPE } from '../googleConfig';
+import JudicialSystem from './features/JudicialSystem';
+import { INITIAL_DATA, CURRICULUM_DATA } from '../data/mockData';
+import { getLocalDateString } from '../utils/dateUtils';
+import TimetableEditor from './TimetableEditor';
+import WikiManager from './WikiManager';
+
+const AdminDashboard = () => {
+  const { users, roles, tasks, assignRole, verifyTask, updatePassword, addUser, deleteUser, logout, fetchAllTimetables, saveTimetable, teacherMessages, deleteTeacherMessage } = useAppContext();
+  const [activeTab, setActiveTab] = useState('management'); // 'management', 'curriculum', 'tools', 'judicial', 'messages'
+  const [activeTool, setActiveTool] = useState(null); // 'timetable', etc.
+  
+  // Curriculum State
+  const [timetables, setTimetables] = useState([]);
+  const [curriculumStats, setCurriculumStats] = useState({});
+
+  useEffect(() => {
+      if (activeTab === 'curriculum') {
+          loadCurriculumStats();
+      }
+  }, [activeTab]);
+
+  const loadCurriculumStats = async () => {
+      const data = await fetchAllTimetables();
+      setTimetables(data);
+      calculateStats(data);
+  };
+
+  const calculateStats = (data) => {
+      const stats = {};
+      // Iterate all timetables
+      data.forEach(entry => {
+          if (!entry.periods) return;
+          entry.periods.forEach((p, index) => {
+              if (!p) return;
+              // Parse string like "[수학] 1단원 - ..."
+              const match = p.match(/^\[(.*?)\] (.*?) -/);
+              if (match) {
+                  const subject = match[1];
+                  const unitName = match[2];
+                  const key = `${subject}_${unitName}`;
+                  
+                  if (!stats[key]) stats[key] = { count: 0, lastDate: '1970-01-01', history: [] };
+                  
+                  stats[key].count += 1;
+                  stats[key].history.push({
+                      date: entry.id,
+                      periodIndex: index,
+                      text: p
+                  });
+                  
+                  if (entry.id > stats[key].lastDate) stats[key].lastDate = entry.id;
+              }
+          });
+      });
+      // Sort history by date desc
+      Object.values(stats).forEach(stat => {
+          stat.history.sort((a, b) => b.date.localeCompare(a.date));
+      });
+      setCurriculumStats(stats);
+  };
+
+  const [editingPasswordId, setEditingPasswordId] = useState(null);
+  const [newPassword, setNewPassword] = useState('');
+  
+  // New User State
+  const [newStudentName, setNewStudentName] = useState('');
+  const [isAddingStudent, setIsAddingStudent] = useState(false);
+
+  // Expanded Row State
+  const [expandedStudentId, setExpandedStudentId] = useState(null);
+  
+  const students = users.filter(u => u.type === 'student').sort((a,b) => a.name.localeCompare(b.name));
+  const pendingTasks = tasks.filter(t => t.status === 'waiting_approval');
+
+  const getRoleName = (roleId) => {
+    return roles.find(r => r.id === roleId)?.name || '역할 없음';
+  };
+
+  const getStudentName = (roleId) => {
+      const student = students.find(s => s.roleId === roleId);
+      return student ? student.name : '알 수 없음';
+  };
+
+  const getMinistryColor = (roleId) => {
+    const role = roles.find(r => r.id === roleId);
+    if (!role) return 'text-gray-500 bg-gray-100';
+    const ministry = INITIAL_DATA.ministries.find(m => m.id === role.ministryId);
+    return ministry ? ministry.color : 'text-gray-500 bg-gray-100';
+  };
+
+  const handlePasswordUpdate = (userId) => {
+      if(!newPassword) {
+          setEditingPasswordId(null);
+          return;
+      }
+      updatePassword(userId, newPassword);
+      setEditingPasswordId(null);
+      setNewPassword('');
+      alert('비밀번호가 변경되었습니다!');
+  };
+
+  const handleAddStudent = (e) => {
+      e.preventDefault();
+      if(newStudentName.trim()) {
+          addUser(newStudentName.trim());
+          setNewStudentName('');
+          setIsAddingStudent(false);
+      }
+  };
+
+  const handleDeleteStudent = (userId, name) => {
+      if(window.confirm(`${name} 학생을 정말 삭제하시겠습니까?`)) {
+          deleteUser(userId);
+      }
+  }
+
+  // Progress Calculation
+  const getStudentProgress = (student) => {
+      if (!student.roleId) return { total: 0, done: 0, percent: 0 };
+      const studentTasks = tasks.filter(t => t.roleId === student.roleId);
+      if (studentTasks.length === 0) return { total: 0, done: 0, percent: 0 };
+
+      // Done = verified AND completed (self)
+      const doneCount = studentTasks.filter(t => 
+        t.status === 'verified' || (t.type === 'self' && t.status === 'completed')
+      ).length;
+      
+      const percent = Math.round((doneCount / studentTasks.length) * 100);
+      return { total: studentTasks.length, done: doneCount, percent };
+  }
+
+  const toggleExpand = (userId) => {
+      if (expandedStudentId === userId) setExpandedStudentId(null);
+      else setExpandedStudentId(userId);
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-100 p-8">
+      {/* Header */}
+      <div className="max-w-6xl mx-auto flex justify-between items-center mb-8">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-800">선생님 대시보드</h1>
+          <p className="text-gray-500">학생들의 역할을 관리하고 업무를 승인해주세요.</p>
+        </div>
+        <div className="flex gap-2">
+            <button 
+            onClick={logout}
+            className="flex items-center px-4 py-2 bg-white text-gray-700 rounded-lg shadow-sm hover:bg-gray-50 border border-gray-200 gap-2"
+            >
+            <LogOut className="w-4 h-4" />
+            로그아웃
+            </button>
+        </div>
+      </div>
+
+       <div className="max-w-6xl mx-auto">
+          {/* Tab Navigation */}
+          <div className="flex space-x-1 mb-8 bg-gray-100 p-1 rounded-xl">
+            <button
+              onClick={() => setActiveTab('management')}
+              className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all ${
+                activeTab === 'management'
+                  ? 'bg-white text-indigo-600 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <div className="flex items-center justify-center gap-2">
+                <UserPlus size={18} />
+                학생 관리
+              </div>
+            </button>
+            <button
+              onClick={() => setActiveTab('curriculum')}
+              className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all ${
+                activeTab === 'curriculum'
+                  ? 'bg-white text-indigo-600 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <div className="flex items-center justify-center gap-2">
+                <BookOpen size={18} />
+                교육과정 및 통계
+              </div>
+            </button>
+             <button
+              onClick={() => setActiveTab('tools')}
+              className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all ${
+                activeTab === 'tools'
+                  ? 'bg-white text-indigo-600 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <div className="flex items-center justify-center gap-2">
+                <Wrench size={18} />
+                부서 도구함
+              </div>
+            </button>
+            <button
+              onClick={() => setActiveTab('judicial')}
+              className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all ${
+                activeTab === 'judicial'
+                  ? 'bg-white text-indigo-600 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <div className="flex items-center justify-center gap-2">
+                <Scale size={18} />
+                솔로몬의 재판소
+              </div>
+            </button>
+            <button
+              onClick={() => setActiveTab('messages')}
+              className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all ${
+                activeTab === 'messages'
+                  ? 'bg-white text-amber-600 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <div className="flex items-center justify-center gap-2">
+                <BellRing size={18} />
+                학생 전달 메시지
+                {teacherMessages.length > 0 && <span className="bg-amber-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">{teacherMessages.length}</span>}
+              </div>
+            </button>
+          </div>
+
+          {/* Content Area */}
+          <div className="space-y-6">
+            {activeTab === 'management' && (
+                <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    {/* Student Management Panel */}
+                    <div className="bg-white rounded-xl shadow-sm p-6 overflow-hidden flex flex-col max-h-[85vh]">
+                    <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                            <div className="w-2 h-8 bg-blue-500 rounded-full"></div>
+                            학생 관리 & 현황
+                        </h2>
+                        <button 
+                            onClick={() => setIsAddingStudent(!isAddingStudent)}
+                            className="flex items-center gap-1 text-sm bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg font-bold hover:bg-blue-100 transition-colors"
+                        >
+                            <UserPlus className="w-4 h-4" /> 학생 추가
+                        </button>
+                    </div>
+
+                    {/* Add Student Form */}
+                    {isAddingStudent && (
+                        <form onSubmit={handleAddStudent} className="mb-4 p-4 bg-blue-50 rounded-xl flex gap-2 animate-in slide-in-from-top-2">
+                            <input 
+                                type="text" 
+                                placeholder="이름을 입력하세요" 
+                                className="flex-1 px-3 py-2 rounded-lg border border-blue-200 outline-none focus:ring-2 focus:ring-blue-400"
+                                value={newStudentName}
+                                onChange={(e) => setNewStudentName(e.target.value)}
+                                autoFocus
+                            />
+                            <button type="submit" className="bg-blue-500 text-white px-4 py-2 rounded-lg font-bold hover:bg-blue-600">추가</button>
+                        </form>
+                    )}
+
+                    <div className="space-y-4 overflow-y-auto pr-2 flex-1">
+                        {students.map(student => {
+                        const progress = getStudentProgress(student);
+                        const isExpanded = expandedStudentId === student.id;
+                        
+                        return (
+                        <div key={student.id} className={`bg-gray-50 rounded-lg border transition-all ${isExpanded ? 'border-blue-300 shadow-md bg-white' : 'border-gray-100 hover:border-blue-200'}`}>
+                            {/* Main Row */}
+                            <div className="p-4 flex items-center justify-between cursor-pointer" onClick={() => toggleExpand(student.id)}>
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 bg-white border border-gray-200 rounded-full flex items-center justify-center font-bold text-gray-600 text-lg">
+                                        {student.name[0]}
+                                    </div>
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <h3 className="font-bold text-gray-800">{student.name}</h3>
+                                            <div className="text-xs font-bold text-gray-400 bg-gray-200 px-1.5 py-0.5 rounded">
+                                                {progress.done}/{progress.total}
+                                            </div>
+                                        </div>
+                                        <p className="text-xs text-gray-500 mt-0.5">PW: {student.password || '1234'}</p>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-3">
+                                    {/* Progress Bar (Mini) */}
+                                    <div className="w-16 h-2 bg-gray-200 rounded-full overflow-hidden">
+                                        <div 
+                                            className="h-full bg-green-500 transition-all duration-500" 
+                                            style={{ width: `${progress.percent}%` }}
+                                        ></div>
+                                    </div>
+                                    {isExpanded ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
+                                </div>
+                            </div>
+
+                            {/* Expanded Details */}
+                            {isExpanded && (
+                                <div className="px-4 pb-4 animate-in slide-in-from-top-1">
+                                    <hr className="border-gray-100 mb-4" />
+                                    
+                                    {/* Task List */}
+                                    <div className="mb-4">
+                                        <h4 className="text-xs font-bold text-gray-400 uppercase mb-2">오늘의 업무 현황</h4>
+                                        {progress.total === 0 ? (
+                                            <p className="text-sm text-gray-400 italic">부여된 역할/업무가 없습니다.</p>
+                                        ) : (
+                                            <div className="space-y-2">
+                                                {tasks.filter(t => t.roleId === student.roleId).map(task => { // Need context tasks
+                                                    let statusColor = "bg-gray-100 text-gray-400"; // Pending self or not started
+                                                    let statusText = "미완료";
+                                                    
+                                                    if (task.status === 'verified' || (task.type === 'self' && task.status === 'completed')) {
+                                                        statusColor = "bg-green-100 text-green-700";
+                                                        statusText = "완료됨";
+                                                    } else if (task.status === 'waiting_approval') {
+                                                        statusColor = "bg-yellow-100 text-yellow-700";
+                                                        statusText = "승인 대기";
+                                                    }
+
+                                                    return (
+                                                        <div key={task.id} className="flex items-center justify-between text-sm">
+                                                            <span className="text-gray-700 truncate mr-2">{task.text}</span>
+                                                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold whitespace-nowrap ${statusColor}`}>
+                                                                {statusText}
+                                                            </span>
+                                                        </div>
+                                                    )
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Admin Actions */}
+                                    <div className="grid grid-cols-2 gap-3 bg-gray-50 p-3 rounded-xl border border-gray-100">
+                                        {/* Role Select */}
+                                        <div>
+                                            <label className="text-xs text-gray-500 font-bold mb-1 block">역할 변경</label>
+                                            <select 
+                                            className="w-full px-2 py-1.5 border rounded-lg bg-white text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                            value={student.roleId || ''}
+                                            onChange={(e) => assignRole(student.id, e.target.value)}
+                                            onClick={(e) => e.stopPropagation()}
+                                            >
+                                            <option value="">역할 없음</option>
+                                            {roles.map(role => (
+                                                <option key={role.id} value={role.id}>
+                                                {role.name}
+                                                </option>
+                                            ))}
+                                            </select>
+                                        </div>
+
+                                        {/* Password Change */}
+                                        <div>
+                                            <label className="text-xs text-gray-500 font-bold mb-1 block">비밀번호 변경</label>
+                                            {editingPasswordId === student.id ? (
+                                                <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                                                    <input 
+                                                        type="text" 
+                                                        className="w-full px-2 py-1.5 border border-blue-300 rounded-lg text-sm outline-none"
+                                                        placeholder="새 암호"
+                                                        value={newPassword}
+                                                        onChange={(e) => setNewPassword(e.target.value)}
+                                                        autoFocus
+                                                    />
+                                                    <button onClick={() => handlePasswordUpdate(student.id)} className="bg-blue-500 text-white px-2 rounded-lg text-xs">확인</button>
+                                                </div>
+                                            ) : (
+                                                <button 
+                                                    onClick={(e) => { e.stopPropagation(); setEditingPasswordId(student.id); setNewPassword(''); }}
+                                                    className="w-full px-2 py-1.5 border border-gray-200 bg-white hover:bg-gray-100 text-gray-600 rounded-lg text-sm flex items-center justify-center gap-1"
+                                                >
+                                                    <KeyRound className="w-3 h-3" />
+                                                    변경하기
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Delete Button */}
+                                    <div className="mt-3 text-right">
+                                        <button 
+                                            onClick={(e) => { e.stopPropagation(); handleDeleteStudent(student.id, student.name); }}
+                                            className="text-xs text-red-400 hover:text-red-600 hover:underline flex items-center justify-end gap-1 ml-auto"
+                                        >
+                                            <Trash2 className="w-3 h-3" /> 학생 삭제
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        )})}
+                    </div>
+                    </div>
+
+                    {/* Pending Approvals Panel */}
+                    <div className="bg-white rounded-xl shadow-sm p-6 h-fit sticky top-8">
+                    <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                        <div className="w-2 h-8 bg-yellow-500 rounded-full"></div>
+                        검사 대기중인 업무
+                    </h2>
+                    
+                    {pendingTasks.length === 0 ? (
+                        <div className="text-center py-12 text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                        <CheckCircle2 className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                        <p>훌륭합니다! 밀린 검사가 없습니다.</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-3">
+                        {pendingTasks.map(task => {
+                            const role = roles.find(r => r.id === task.roleId);
+                            const ministry = INITIAL_DATA.ministries.find(m => m.id === role?.ministryId);
+                            
+                            return (
+                            <div key={task.id} className="flex items-center justify-between p-4 bg-yellow-50 border border-yellow-100 rounded-lg shadow-sm">
+                                <div>
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${ministry?.color || 'bg-gray-200'}`}>
+                                            {ministry?.name || '부서 미정'}
+                                        </span>
+                                        <span className="text-xs text-gray-500 font-medium">
+                                            - {role?.name} ({getStudentName(task.roleId)})
+                                        </span>
+                                    </div>
+                                <p className="font-bold text-gray-800">{task.text}</p>
+                                </div>
+                                <button
+                                onClick={() => verifyTask(task.id)}
+                                className="flex items-center px-4 py-2 bg-green-500 text-white rounded-lg text-sm font-bold hover:bg-green-600 transition-colors shadow-sm gap-1 hover:shadow-md"
+                                >
+                                <CheckCircle2 className="w-4 h-4" />
+                                참 잘했어요
+                                </button>
+                            </div>
+                            );
+                        })}
+                        </div>
+                    )}
+                    </div>
+                </div>
+            )}
+
+            {activeTab === 'curriculum' && (
+                <CurriculumView 
+                    stats={curriculumStats} 
+                    timetables={timetables}
+                    onRefresh={loadCurriculumStats} 
+                />
+            )}
+
+            {activeTab === 'tools' && (
+                <div className="space-y-6">
+                    {!activeTool ? (
+                         <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+                            {/* Education Ministry Tool */}
+                            <button 
+                                onClick={() => setActiveTool('timetable_editor')}
+                                className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md hover:border-indigo-200 transition-all flex flex-col items-center gap-4 group"
+                            >
+                                <div className="w-16 h-16 bg-indigo-50 rounded-full flex items-center justify-center group-hover:bg-indigo-600 transition-colors">
+                                    <Calendar className="w-8 h-8 text-indigo-600 group-hover:text-white transition-colors" />
+                                </div>
+                                <div className="text-center">
+                                    <h3 className="font-bold text-lg text-gray-800">시간표 관리자</h3>
+                                    <p className="text-gray-400 text-sm mt-1">교육부 권한</p>
+                                </div>
+                            </button>
+
+                            {/* Placeholders for other tools */}
+                            <button 
+                                onClick={() => setActiveTool('wiki_manager')}
+                                className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md hover:border-indigo-200 transition-all flex flex-col items-center gap-4 group"
+                            >
+                                <div className="w-16 h-16 bg-indigo-50 rounded-full flex items-center justify-center group-hover:bg-indigo-600 transition-colors">
+                                    <BookOpen className="w-8 h-8 text-indigo-600 group-hover:text-white transition-colors" />
+                                </div>
+                                <div className="text-center">
+                                    <h3 className="font-bold text-lg text-gray-800">물어보살 관리자</h3>
+                                    <p className="text-gray-400 text-sm mt-1">지식 데이터베이스</p>
+                                </div>
+                            </button>
+
+                             <button 
+                                className="bg-gray-50 p-8 rounded-2xl border border-dashed border-gray-200 flex flex-col items-center gap-4 opacity-60 cursor-not-allowed"
+                            >
+                                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
+                                    <Wrench className="w-8 h-8 text-gray-400" />
+                                </div>
+                                <div className="text-center">
+                                    <h3 className="font-bold text-lg text-gray-500">환경 설정</h3>
+                                    <p className="text-gray-400 text-sm mt-1">준비중...</p>
+                                </div>
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 animate-in fade-in zoom-in-95 duration-200">
+                             <div className="flex items-center justify-between mb-6 border-b border-gray-100 pb-4">
+                                <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                                     {activeTool === 'timetable_editor' && <><Calendar className="w-6 h-6 text-indigo-600"/> 시간표 관리자</>}
+                                     {activeTool === 'wiki_manager' && <><BookOpen className="w-6 h-6 text-indigo-600"/> 물어보살 관리자</>}
+                                </h3>
+                                <button 
+                                    onClick={() => setActiveTool(null)}
+                                    className="text-gray-400 hover:text-gray-600 font-bold text-sm"
+                                >
+                                    ✕ 닫기
+                                </button>
+                             </div>
+
+                             {activeTool === 'timetable_editor' && (
+                                 <AdminTimetableManager onSave={saveTimetable} />
+                             )}
+                             {activeTool === 'wiki_manager' && (
+                                 <WikiManager onClose={() => setActiveTool(null)} />
+                             )}
+                        </div>
+                    )}
+                </div>
+            )}
+            {activeTab === 'judicial' && (
+                <JudicialSystem />
+            )}
+            {activeTab === 'messages' && (
+                <MessagesInbox messages={teacherMessages} onDelete={deleteTeacherMessage} />
+            )}
+          </div>
+        </div>
+    </div>
+  );
+};
+
+// Internal Component for Admin Timetable Management
+const AdminTimetableManager = ({ onSave }) => {
+    const { fetchTimetable, currentTimetable } = useAppContext();
+    const [selectedDate, setSelectedDate] = useState(new Date());
+    const [editPeriods, setEditPeriods] = useState(Array(6).fill(''));
+
+    // Fetch on date change
+    useEffect(() => {
+        const dateStr = getLocalDateString(selectedDate);
+        fetchTimetable(dateStr);
+    }, [selectedDate]);
+
+    // Sync state
+    useEffect(() => {
+        setEditPeriods(currentTimetable?.periods || Array(6).fill(''));
+    }, [currentTimetable]);
+
+    const handleSave = async (periods) => {
+        const dateStr = getLocalDateString(selectedDate);
+        await onSave(dateStr, periods);
+        alert('시간표가 저장되었습니다.');
+    };
+
+    const handleDateChange = (days) => {
+      const newDate = new Date(selectedDate);
+      newDate.setDate(selectedDate.getDate() + days);
+      setSelectedDate(newDate);
+    }
+
+    return (
+        <div className="max-w-xl mx-auto">
+             <div className="flex items-center justify-center gap-4 mb-6 bg-gray-50 p-3 rounded-xl">
+                 <button onClick={() => handleDateChange(-1)} className="p-2 hover:bg-white rounded-lg shadow-sm transition-all"><ChevronDown className="w-5 h-5 text-gray-600 rotate-90" /></button>
+                 <span className="text-lg font-bold text-gray-700 min-w-[140px] text-center">
+                     {selectedDate.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' })}
+                 </span>
+                 <button onClick={() => handleDateChange(1)} className="p-2 hover:bg-white rounded-lg shadow-sm transition-all"><ChevronUp className="w-5 h-5 text-gray-600 rotate-90" /></button>
+             </div>
+
+             <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100">
+                <TimetableEditor 
+                    initialPeriods={editPeriods}
+                    onSave={handleSave}
+                    onCancel={() => {}} // No cancel action in standalone mode, simply don't save
+                />
+             </div>
+        </div>
+    );
+}
+
+const CurriculumView = ({ stats, timetables, onRefresh }) => {
+    const { saveTimetable } = useAppContext();
+    const subjects = Object.keys(CURRICULUM_DATA.subjects);
+    const [selectedSubject, setSelectedSubject] = useState(subjects[0]);
+    const [historyModalData, setHistoryModalData] = useState(null); // { unitName, history: [] }
+
+    const subjectData = CURRICULUM_DATA.subjects[selectedSubject];
+    
+    // Flatten units
+    const units = selectedSubject === '사회' 
+        ? subjectData.units.flatMap(major => major.sub_units)
+        : subjectData.units;
+
+    const totalUnits = units.length;
+    const startedUnits = units.filter(u => stats[`${selectedSubject}_${u.name}`]?.count > 0).length;
+    const progressPercent = Math.round((startedUnits / totalUnits) * 100);
+
+    const handleUnitClick = (unitName) => {
+        const key = `${selectedSubject}_${unitName}`;
+        const stat = stats[key];
+        if (stat?.history?.length > 0) {
+            setHistoryModalData({
+                unitName,
+                history: stat.history
+            });
+        }
+    };
+
+    const handleDeleteHistory = async (date, periodIndex) => {
+        if(!window.confirm('정말 이 수업 기록을 삭제하시겠습니까?\n(시간표에서 해당 내용이 지워집니다.)')) return;
+
+        try {
+            // Find full timetable for date
+            const targetEntry = timetables.find(t => t.id === date);
+            if (!targetEntry) return;
+
+            // Create new periods array
+            const newPeriods = [...targetEntry.periods];
+            newPeriods[periodIndex] = ''; // Clear the slot
+
+            // Save
+            await saveTimetable(date, newPeriods);
+            
+            // Close modal if empty or just refresh
+            alert('삭제되었습니다.');
+            setHistoryModalData(null); // Close modal to force refresh consistency
+            onRefresh();
+        } catch (e) {
+            console.error(e);
+            alert('삭제 중 오류가 발생했습니다.');
+        }
+    };
+
+    return (
+        <div className="max-w-6xl mx-auto bg-white rounded-xl shadow-sm p-8 min-h-[600px] relative">
+            <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                    <BookOpen className="w-6 h-6 text-indigo-500" />
+                    학급 진도 현황표
+                </h2>
+                <div className="text-sm font-bold text-gray-500">
+                    전체 진도율: <span className="text-indigo-600 text-lg">{progressPercent}%</span> ({startedUnits}/{totalUnits})
+                </div>
+            </div>
+
+            {/* Subject Tabs */}
+            <div className="flex gap-2 mb-6 border-b border-gray-100 pb-1">
+                {subjects.map(subject => (
+                    <button
+                        key={subject}
+                        onClick={() => setSelectedSubject(subject)}
+                        className={`px-6 py-3 rounded-t-xl font-bold transition-all relative top-0.5 ${selectedSubject === subject 
+                            ? 'bg-indigo-50 text-indigo-700 border-b-2 border-indigo-500' 
+                            : 'text-gray-400 hover:text-gray-600'}`}
+                    >
+                        {subject}
+                    </button>
+                ))}
+            </div>
+
+            {/* Units Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {units.map((unit, idx) => {
+                    const key = `${selectedSubject}_${unit.name}`;
+                    const stat = stats[key];
+                    const isStarted = stat?.count > 0;
+
+                    return (
+                        <div 
+                            key={idx} 
+                            onClick={() => handleUnitClick(unit.name)}
+                            className={`p-4 rounded-xl border transition-all relative group ${isStarted ? 'border-indigo-200 bg-indigo-50 hover:shadow-md cursor-pointer' : 'border-gray-100 bg-gray-50'}`}
+                        >
+                            <div className="flex justify-between items-start mb-2">
+                                <span className={`text-xs font-bold px-2 py-1 rounded-md ${isStarted ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-200 text-gray-500'}`}>
+                                    {unit.unit || (selectedSubject === '사회' ? '소단원' : '단원')}
+                                </span>
+                                {isStarted && (
+                                    <span className="text-xs font-bold text-green-600 flex items-center gap-1">
+                                        <CheckCircle2 className="w-3 h-3" /> 수업 완료
+                                    </span>
+                                )}
+                            </div>
+                            <h3 className={`font-bold text-lg mb-1 leading-tight ${isStarted ? 'text-gray-800' : 'text-gray-400'}`}>
+                                {unit.name}
+                            </h3>
+                            <p className="text-xs text-gray-500 mb-3 line-clamp-2 h-8">
+                                {unit.sessions}
+                            </p>
+                            
+                            {isStarted ? (
+                                <div className="pt-3 border-t border-indigo-100 flex justify-between items-center text-xs">
+                                    <span className="text-gray-600">마지막 수업: <b>{stat.lastDate}</b></span>
+                                    <span className="text-indigo-500 font-bold">{stat.count}회 기록</span>
+                                </div>
+                            ) : (
+                                <div className="pt-3 border-t border-gray-100 text-xs text-gray-400">
+                                    아직 수업 기록이 없습니다.
+                                </div>
+                            )}
+                            
+                            {isStarted && <div className="absolute inset-0 bg-indigo-500/0 group-hover:bg-indigo-500/5 rounded-xl transition-colors pointer-events-none" />}
+                        </div>
+                    );
+                })}
+            </div>
+
+            {/* History Modal */}
+            {historyModalData && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200" onClick={() => setHistoryModalData(null)}>
+                    <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="text-xl font-bold text-gray-800">
+                                📖 수업 기록 상세
+                                <span className="block text-sm font-medium text-gray-500 mt-1">{selectedSubject} - {historyModalData.unitName}</span>
+                            </h3>
+                            <button onClick={() => setHistoryModalData(null)} className="p-2 hover:bg-gray-100 rounded-full text-gray-500">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+                            {historyModalData.history.map((record, idx) => (
+                                <div key={idx} className="flex items-start justify-between gap-3 p-4 bg-gray-50 rounded-xl border border-gray-200">
+                                    <div>
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <span className="text-sm font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">
+                                                {record.date}
+                                            </span>
+                                            <span className="text-xs font-bold text-gray-400">
+                                                {record.periodIndex + 1}교시
+                                            </span>
+                                        </div>
+                                        <p className="text-sm text-gray-700 font-medium">
+                                            {record.text}
+                                        </p>
+                                    </div>
+                                    <button 
+                                        onClick={() => handleDeleteHistory(record.date, record.periodIndex)}
+                                        className="p-2 text-red-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                        title="기록 삭제"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="mt-6 text-right">
+                             <button onClick={() => setHistoryModalData(null)} className="px-5 py-2.5 bg-gray-800 text-white font-bold rounded-xl hover:bg-gray-900">
+                                닫기
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+// =====================
+// MESSAGES INBOX COMPONENT
+// =====================
+const MessagesInbox = ({ messages, onDelete }) => {
+    const [isExporting, setIsExporting] = useState(false);
+    const [exportedUrl, setExportedUrl] = useState(null);
+    const tokenClientRef = useRef(null);
+    const gapiReadyRef = useRef(false);
+
+    const initGapi = useCallback(() => new Promise((resolve) => {
+        if (gapiReadyRef.current) return resolve();
+        window.gapi.load('client', async () => {
+            await window.gapi.client.init({ discoveryDocs: ['https://sheets.googleapis.com/$discovery/rest?version=v4'] });
+            gapiReadyRef.current = true;
+            resolve();
+        });
+    }), []);
+
+    const exportToSheets = useCallback(async () => {
+        if (!messages.length) { alert('전달된 메시지가 없습니다.'); return; }
+        setIsExporting(true);
+        try {
+            await initGapi();
+            const getToken = () => new Promise((resolve, reject) => {
+                if (!tokenClientRef.current) {
+                    tokenClientRef.current = window.google.accounts.oauth2.initTokenClient({
+                        client_id: GOOGLE_CLIENT_ID, scope: GOOGLE_SHEETS_SCOPE,
+                        callback: (resp) => { if (resp.error) reject(resp); else resolve(resp); },
+                    });
+                }
+                tokenClientRef.current.requestAccessToken({ prompt: '' });
+            });
+            await getToken();
+
+            const header = ['번호', '날짜', '작성자', '내용'];
+            const rows = messages.map((m, i) => [i + 1, m.date || '', m.authorName || '', m.content || '']);
+
+            const configRef = doc(db, 'settings', 'messagesSheetConfig');
+            const configSnap = await getDoc(configRef);
+            let spreadsheetId = configSnap.exists() ? configSnap.data().spreadsheetId : null;
+            let spreadsheetUrl;
+
+            if (spreadsheetId) {
+                try {
+                    const meta = await window.gapi.client.sheets.spreadsheets.get({ spreadsheetId });
+                    spreadsheetUrl = meta.result.spreadsheetUrl;
+                    await window.gapi.client.sheets.spreadsheets.values.clear({ spreadsheetId, range: '학생 전달 메시지' });
+                } catch { spreadsheetId = null; }
+            }
+
+            if (!spreadsheetId) {
+                const resp = await window.gapi.client.sheets.spreadsheets.create({
+                    properties: { title: '📢 학생 전달 메시지함' },
+                    sheets: [{ properties: { title: '학생 전달 메시지' } }],
+                });
+                spreadsheetId = resp.result.spreadsheetId;
+                spreadsheetUrl = resp.result.spreadsheetUrl;
+                const sheetId = resp.result.sheets[0].properties.sheetId;
+                await setDoc(configRef, { spreadsheetId, spreadsheetUrl });
+                await window.gapi.client.sheets.spreadsheets.batchUpdate({ spreadsheetId, resource: { requests: [
+                    { repeatCell: { range: { sheetId, startRowIndex: 0, endRowIndex: 1 }, cell: { userEnteredFormat: { textFormat: { bold: true, foregroundColor: { red: 1, green: 1, blue: 1 } }, backgroundColor: { red: 0.95, green: 0.6, blue: 0.07 }, horizontalAlignment: 'CENTER' } }, fields: 'userEnteredFormat(textFormat,backgroundColor,horizontalAlignment)' } },
+                    { repeatCell: { range: { sheetId, startRowIndex: 0, endRowIndex: rows.length + 1 }, cell: { userEnteredFormat: { wrapStrategy: 'WRAP' } }, fields: 'userEnteredFormat(wrapStrategy)' } },
+                    { autoResizeDimensions: { dimensions: { sheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: 3 } } },
+                    { updateDimensionProperties: { range: { sheetId, dimension: 'COLUMNS', startIndex: 3, endIndex: 4 }, properties: { pixelSize: 400 }, fields: 'pixelSize' } },
+                ]}});
+            }
+
+            await window.gapi.client.sheets.spreadsheets.values.update({
+                spreadsheetId, range: '학생 전달 메시지!A1', valueInputOption: 'RAW',
+                resource: { values: [header, ...rows] },
+            });
+            setExportedUrl(spreadsheetUrl);
+        } catch (err) {
+            console.error(err);
+            alert(`내보내기 실패: ${err.message || JSON.stringify(err)}`);
+        } finally { setIsExporting(false); }
+    }, [messages, initGapi]);
+
+    return (
+        <div className="max-w-4xl mx-auto space-y-4">
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-amber-100 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center">
+                        <BellRing className="w-5 h-5 text-amber-600" />
+                    </div>
+                    <div>
+                        <h2 className="text-xl font-bold text-gray-800">학생 전달 메시지함</h2>
+                        <p className="text-sm text-gray-500">학생들이 선생님께 꼭 전달하고 싶은 내용을 모아서 보여줍니다.</p>
+                    </div>
+                </div>
+                <button onClick={exportToSheets} disabled={isExporting}
+                    className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-emerald-700 disabled:opacity-50 transition-colors shadow-sm">
+                    {isExporting ? <><Loader2 className="w-4 h-4 animate-spin" /> 내보내는 중...</> : <><Sheet className="w-4 h-4" /> 구글 시트</>}
+                </button>
+            </div>
+
+            {exportedUrl && (
+                <div className="flex items-center justify-between gap-3 bg-emerald-50 border border-emerald-200 rounded-2xl px-5 py-4 shadow-sm">
+                    <div className="flex items-center gap-3">
+                        <Sheet className="w-5 h-5 text-emerald-600 shrink-0" />
+                        <span className="text-emerald-800 font-bold text-sm">구글 시트가 업데이트되었습니다!</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <a href={exportedUrl} target="_blank" rel="noopener noreferrer"
+                            className="flex items-center gap-1.5 bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-emerald-700 transition-colors shadow">
+                            <ExternalLink className="w-4 h-4" /> 시트 열기
+                        </a>
+                        <button onClick={() => setExportedUrl(null)} className="p-2 text-emerald-400 hover:text-emerald-600 hover:bg-emerald-100 rounded-lg transition-colors"><X className="w-4 h-4" /></button>
+                    </div>
+                </div>
+            )}
+
+            {messages.length === 0 ? (
+                <div className="bg-white rounded-2xl p-12 shadow-sm border border-dashed border-gray-200 text-center text-gray-400">
+                    <BellRing className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                    <p className="font-bold">전달된 메시지가 없습니다.</p>
+                    <p className="text-sm mt-1">학생들이 메시지를 보내면 여기에 표시됩니다.</p>
+                </div>
+            ) : (
+                <div className="space-y-3">
+                    {messages.map((msg) => (
+                        <div key={msg.id} className="bg-white rounded-2xl p-5 shadow-sm border border-amber-100 hover:border-amber-300 transition-all">
+                            <div className="flex items-start justify-between gap-3">
+                                <div className="flex-1">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <div className="w-7 h-7 bg-amber-100 rounded-full flex items-center justify-center text-xs font-bold text-amber-700">
+                                            {msg.authorName?.[0] || '?'}
+                                        </div>
+                                        <span className="font-bold text-gray-800">{msg.authorName}</span>
+                                        <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded">{msg.date}</span>
+                                        <span className="text-xs text-gray-400">{new Date(msg.timestamp).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</span>
+                                    </div>
+                                    <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                                </div>
+                                <button onClick={() => { if (window.confirm('이 메시지를 삭제하시겠습니까?')) onDelete(msg.id); }}
+                                    className="p-2 text-gray-300 hover:text-red-400 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0">
+                                    <Trash2 className="w-4 h-4" />
+                                </button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+};
+
+export default AdminDashboard;
