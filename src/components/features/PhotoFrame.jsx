@@ -24,7 +24,7 @@ const PhotoFrame = () => {
     };
 
     // Admin or Media Role check
-    const isMediaManager = currentUser?.type === 'admin' || (currentUser?.roleId && currentUser.roleId.includes('media'));
+    const isMediaManager = currentUser?.type === 'admin' || (currentUser?.roleIds && currentUser.roleIds.some(id => id.includes('media')));
 
     // Default Placeholder
     const displayUrl = photoData?.url || 'https://images.unsplash.com/photo-1577896335477-2858506f48db?q=80&w=1000&auto=format&fit=crop';

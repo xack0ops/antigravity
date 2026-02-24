@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../../context/AppContext';
-import { INITIAL_DATA } from '../../data/mockData';
 import { Info, Circle, CheckCircle2, Clock, X, BellRing, Send } from 'lucide-react';
 
 const MyJob = ({ onNavigate }) => {
-    const { currentUser, tasks, roles, toggleTask, addTeacherMessage } = useAppContext();
+    const { currentUser, tasks, roles, ministries, toggleTask, addTeacherMessage } = useAppContext();
     const [showPopup, setShowPopup] = useState(false);
     const [showMessageModal, setShowMessageModal] = useState(false);
     const [messageText, setMessageText] = useState('');
@@ -12,20 +11,21 @@ const MyJob = ({ onNavigate }) => {
 
     if (!currentUser) return null;
 
-    const myRole = roles.find(r => r.id === currentUser.roleId);
-    const myMinistry = myRole ? INITIAL_DATA.ministries.find(m => m.id === myRole.ministryId) : null;
+    const myMinistry = ministries.find(m => m.id === currentUser.ministryId);
+    const myRoles = roles.filter(r => currentUser.roleIds?.includes(r.id));
     const roleColor = myMinistry ? myMinistry.color : 'border-gray-200 bg-gray-50';
     
-    const myTasks = tasks
-        .filter(t => t.roleId === currentUser.roleId)
-        .map(t => {
-            const staticTask = INITIAL_DATA.tasks.find(st => st.id === t.id);
-            return {
-                ...t,
-                text: staticTask?.text || t.text,
-                action: staticTask?.action || t.action
-            };
-        });
+    const myTasks = tasks.filter(t => {
+        if (!currentUser.roleIds?.includes(t.roleId)) return false;
+        const freq = t.frequency || { type: 'daily', days: [] };
+        if (freq.type === 'specific_days') {
+            // 8시간을 빼서 오전 8시를 기준으로 요일이 변경되도록 설정
+            const resetBoundaryDate = new Date(Date.now() - (8 * 60 * 60 * 1000));
+            const todayDay = resetBoundaryDate.getDay();
+            return freq.days.includes(todayDay);
+        }
+        return true;
+    });
 
     const handleSendMessage = async () => {
         if (!messageText.trim()) return;
@@ -44,7 +44,7 @@ const MyJob = ({ onNavigate }) => {
         }
     };
 
-    if (!myRole) return (
+    if (myRoles.length === 0) return (
         <div className="text-center py-12">
             <h2 className="text-xl font-bold text-gray-800">아직 역할이 없습니다.</h2>
             <p className="text-gray-500">선생님께 역할을 배정해달라고 말씀드리세요.</p>
@@ -64,8 +64,12 @@ const MyJob = ({ onNavigate }) => {
                             {myMinistry?.name || '소속 없음'}
                         </span>
                     </div>
-                    <h1 className="text-3xl md:text-4xl font-black mb-2 text-gray-800">{myRole.name}</h1>
-                    <p className="text-lg md:text-xl font-medium text-gray-600 mb-4">{myRole.description}</p>
+                    <h1 className="text-3xl md:text-4xl font-black mb-3 text-gray-800">{myRoles.map(r=>r.name).join(' & ')}</h1>
+                    <div className="space-y-1 mb-4">
+                        {myRoles.map(r => (
+                            <p key={r.id} className="text-base md:text-lg font-medium text-gray-600"><span className="font-bold">[{r.name}]</span> {r.description}</p>
+                        ))}
+                    </div>
                     
                     <button 
                         onClick={() => setShowPopup(true)} 
@@ -162,19 +166,26 @@ const MyJob = ({ onNavigate }) => {
 
                         <h2 className="text-2xl font-bold text-gray-800 mb-2">반가워요! 👋</h2>
                         <p className="text-gray-600 mb-6">
-                            오늘의 역할은 <span className="font-bold text-indigo-600">{myRole.name}</span> 입니다.
+                            오늘의 역할은 <span className="font-bold text-indigo-600">{myRoles.map(r=>r.name).join(', ')}</span> 입니다.
                         </p>
 
-                        <div className="bg-gray-50 rounded-xl p-4 mb-6 text-left">
-                            <h3 className="font-bold text-gray-700 mb-2 text-sm">주요 업무</h3>
-                            <ul className="space-y-2 text-sm text-gray-600">
-                                {myRole.duties.map((duty, i) => (
-                                <li key={i} className="flex items-start gap-2">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 mt-1.5 flex-shrink-0" />
-                                    {duty}
-                                </li>
+                        <div className="bg-gray-50 rounded-xl p-4 mb-6 text-left max-h-48 overflow-y-auto">
+                            <h3 className="font-bold text-gray-700 mb-3 text-sm">나의 주요 업무</h3>
+                            <div className="space-y-4">
+                                {myRoles.map(role => (
+                                    <div key={role.id}>
+                                        <h4 className="text-xs font-bold text-indigo-500 mb-1">[{role.name}]</h4>
+                                        <ul className="space-y-1 text-sm text-gray-600">
+                                            {role.duties.map((duty, i) => (
+                                            <li key={i} className="flex items-start gap-2">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 mt-1.5 flex-shrink-0" />
+                                                {duty}
+                                            </li>
+                                            ))}
+                                        </ul>
+                                    </div>
                                 ))}
-                            </ul>
+                            </div>
                         </div>
 
                         <button 

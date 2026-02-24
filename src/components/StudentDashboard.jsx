@@ -1,18 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { INITIAL_DATA } from '../data/mockData';
-import { LogOut, Info, Circle, CheckCircle2, Clock, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Edit3, FolderDown, MessageCircleQuestion, X, BellRing, Send, Gavel } from 'lucide-react';
+import { LogOut, Info, Circle, CheckCircle2, Clock, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Edit3, FolderDown, MessageCircleQuestion, X, BellRing, Send, Gavel, KeyRound } from 'lucide-react';
 import { getLocalDateString } from '../utils/dateUtils';
 import TimetableEditor from './TimetableEditor';
 import JudicialSystem from './features/JudicialSystem';
 
 const StudentDashboard = () => {
-  const { currentUser, tasks, roles, toggleTask, logout, currentTimetable, fetchTimetable, saveTimetable, addTeacherMessage } = useAppContext();
+  const { currentUser, tasks, roles, ministries, toggleTask, logout, currentTimetable, fetchTimetable, saveTimetable, addTeacherMessage, updatePassword } = useAppContext();
   const [showPopup, setShowPopup] = useState(false);
   const [showJudicial, setShowJudicial] = useState(false);
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [messageText, setMessageText] = useState('');
   const [messageSending, setMessageSending] = useState(false);
+  
+  const [studentPassword, setStudentPassword] = useState('');
+  const [isEditingPassword, setIsEditingPassword] = useState(false);
 
   // Timetable State
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -37,20 +40,25 @@ const StudentDashboard = () => {
 
   if (!currentUser) return <div className="min-h-screen flex items-center justify-center">로그인이 필요합니다.</div>;
 
-  const myRole = roles.find(r => r.id === currentUser.roleId);
-  const myMinistry = myRole ? INITIAL_DATA.ministries.find(m => m.id === myRole.ministryId) : null;
+  const myMinistry = ministries.find(m => m.id === currentUser.ministryId);
+  const myRoles = roles.filter(r => currentUser.roleIds?.includes(r.id));
   const roleColor = myMinistry ? myMinistry.color : 'border-gray-200 bg-gray-50';
 
-  const myTasks = tasks
-    .filter(t => t.roleId === currentUser.roleId)
-    .map(t => {
-      const staticTask = INITIAL_DATA.tasks.find(st => st.id === t.id);
-      return { ...t, text: staticTask?.text || t.text, action: staticTask?.action || t.action };
-    });
+  const myTasks = tasks.filter(t => {
+      if (!currentUser.roleIds?.includes(t.roleId)) return false;
+      const freq = t.frequency || { type: 'daily', days: [] };
+      if (freq.type === 'specific_days') {
+          // 8시간을 빼서 오전 8시를 기준으로 요일이 변경되도록 설정
+          const resetBoundaryDate = new Date(Date.now() - (8 * 60 * 60 * 1000));
+          const todayDay = resetBoundaryDate.getDay(); // 0 is Sunday
+          return freq.days.includes(todayDay);
+      }
+      return true; // daily and weekly tasks always show up
+  });
 
   const canAccessJudicial = currentUser.type === 'admin' ||
     myMinistry?.name === '행정안전부' ||
-    myRole?.name === '대법원장';
+    myRoles.some(r => r.name === '대법원장');
 
   const handleDateChange = (days) => {
     const newDate = new Date(selectedDate);
@@ -84,10 +92,10 @@ const StudentDashboard = () => {
 
   const isEducationMinistry = myMinistry?.id === 'm4';
 
-  if (!myRole && currentUser.type !== 'admin') return (
+  if (myRoles.length === 0 && currentUser.type !== 'admin') return (
     <div className="min-h-screen flex items-center justify-center p-8 bg-gray-50">
       <div className="text-center">
-        <h2 className="text-2xl font-bold mb-4">아직 역할이 없어요!</h2>
+        <h2 className="text-2xl font-bold mb-4">아직 부서/역할이 없어요!</h2>
         <p className="mb-6 text-gray-600">선생님께 역할을 배정해달라고 말씀드리세요.</p>
         <button onClick={logout} className="px-4 py-2 bg-gray-200 rounded-lg font-bold">로그아웃</button>
       </div>
@@ -102,9 +110,42 @@ const StudentDashboard = () => {
           <span className="text-xl md:text-2xl">🏫</span> 우리 반 나라
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-gray-600 font-bold text-sm md:text-base">{currentUser.name} {currentUser.type === 'student' ? '학생' : '선생님'}</span>
-          <button onClick={logout} className="text-gray-400 hover:text-red-500 bg-gray-100 hover:bg-red-50 p-2.5 rounded-full transition-colors">
-            <LogOut className="w-5 h-5" />
+          <span className="text-gray-600 font-bold text-sm md:text-base hidden sm:inline-block">{currentUser.name} {currentUser.type === 'student' ? '학생' : '선생님'}</span>
+          
+          {isEditingPassword ? (
+              <div className="flex items-center gap-1">
+                  <input 
+                      type="text" 
+                      value={studentPassword}
+                      onChange={(e) => setStudentPassword(e.target.value)}
+                      placeholder="새 비밀번호"
+                      className="px-2 py-1.5 border border-indigo-200 rounded-lg text-sm outline-none w-24 md:w-28 h-9 font-medium focus:ring-2 focus:ring-indigo-400"
+                  />
+                  <button 
+                      onClick={() => {
+                          if (studentPassword) {
+                              updatePassword(currentUser.id, studentPassword);
+                              alert('비밀번호가 변경되었습니다!');
+                          }
+                          setIsEditingPassword(false);
+                          setStudentPassword('');
+                      }}
+                      className="bg-indigo-500 hover:bg-indigo-600 text-white px-3 py-1.5 text-sm font-bold rounded-lg h-9 transition-colors"
+                  >변경</button>
+                  <button onClick={() => setIsEditingPassword(false)} className="bg-gray-100 hover:bg-gray-200 text-gray-600 px-2 py-1.5 text-sm font-bold rounded-lg h-9 transition-colors">취소</button>
+              </div>
+          ) : (
+              <button 
+                  onClick={() => setIsEditingPassword(true)}
+                  className="flex items-center gap-1 text-gray-500 hover:text-indigo-600 text-xs md:text-sm font-bold bg-gray-100 hover:bg-gray-200 px-2.5 md:px-3 py-2 rounded-lg transition-colors h-9"
+                  title="내 수첩 비밀번호 변경"
+              >
+                  <KeyRound className="w-4 h-4" /> <span className="hidden sm:inline-block">비번 변경</span>
+              </button>
+          )}
+
+          <button onClick={logout} className="text-gray-500 hover:text-red-500 bg-gray-100 hover:bg-red-50 px-2.5 md:px-3 flex items-center gap-1 py-2 rounded-lg transition-colors h-9 font-bold">
+            <LogOut className="w-4 h-4" /> <span className="hidden sm:inline-block">로그아웃</span>
           </button>
         </div>
       </nav>
@@ -188,8 +229,12 @@ const StudentDashboard = () => {
               <div className="flex items-center gap-2 mb-2 opacity-80">
                 <span className="text-xs font-bold uppercase tracking-wider border border-current px-2 py-0.5 rounded-full">{myMinistry?.name || '소속 없음'}</span>
               </div>
-              <h1 className="text-3xl font-black mb-2">{myRole.name}</h1>
-              <p className="text-lg font-medium opacity-90 mb-4">{myRole.description}</p>
+              <h1 className="text-2xl md:text-3xl font-black mb-3">{myRoles.map(r => r.name).join(' & ')}</h1>
+              <div className="space-y-1 mb-4">
+                 {myRoles.map(r => (
+                     <p key={r.id} className="text-sm md:text-base font-medium opacity-90"><span className="font-bold">[{r.name}]</span> {r.description}</p>
+                 ))}
+              </div>
               <button onClick={() => setShowPopup(true)} className="inline-flex items-center gap-1 text-sm font-bold underline opacity-80 hover:opacity-100">나의 임무 다시보기</button>
             </div>
           </div>
@@ -283,17 +328,24 @@ const StudentDashboard = () => {
               <Info className="w-8 h-8 opacity-80" />
             </div>
             <h2 className="text-2xl font-bold text-gray-800 mb-2">반가워요! 👋</h2>
-            <p className="text-gray-600 mb-6">오늘의 역할은 <span className="font-bold text-indigo-600">{myRole.name}</span> 입니다.</p>
-            <div className="bg-gray-50 rounded-xl p-4 mb-6 text-left">
-              <h3 className="font-bold text-gray-700 mb-2 text-sm">주요 업무</h3>
-              <ul className="space-y-2 text-sm text-gray-600">
-                {myRole.duties.map((duty, i) => (
-                  <li key={i} className="flex items-start gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 mt-1.5 flex-shrink-0" />
-                    {duty}
-                  </li>
-                ))}
-              </ul>
+            <p className="text-gray-600 mb-6">오늘의 역할은 <span className="font-bold text-indigo-600">{myRoles.map(r=>r.name).join(', ')}</span> 입니다.</p>
+            <div className="bg-gray-50 rounded-xl p-4 mb-6 text-left max-h-48 overflow-y-auto">
+              <h3 className="font-bold text-gray-700 mb-3 text-sm">나의 주요 업무</h3>
+              <div className="space-y-4">
+                  {myRoles.map(role => (
+                      <div key={role.id}>
+                          <h4 className="text-xs font-bold text-indigo-500 mb-1">[{role.name}]</h4>
+                          <ul className="space-y-1 text-sm text-gray-600">
+                            {role.duties.map((duty, i) => (
+                              <li key={i} className="flex items-start gap-2">
+                                <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 mt-1.5 flex-shrink-0" />
+                                {duty}
+                              </li>
+                            ))}
+                          </ul>
+                      </div>
+                  ))}
+              </div>
             </div>
             <button onClick={() => setShowPopup(false)} className="w-full py-3.5 bg-gray-900 text-white rounded-xl font-bold hover:bg-gray-800 transition-colors shadow-lg shadow-gray-200">확인했습니다!</button>
           </div>

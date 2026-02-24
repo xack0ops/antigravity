@@ -265,9 +265,8 @@ const JudicialSystem = () => {
     const { exportToSheets, isExporting, exportedUrl, setExportedUrl } = useGoogleSheetsExport();
 
     // Role & Authority
-    const myRole = roles.find(r => r.id === currentUser?.roleId);
-    const myMinistryId = myRole?.ministryId;
-    const isAuthority = currentUser?.type === 'admin' || myMinistryId === 'm2' || myRole?.id === 'r_justice';
+    const myMinistryId = currentUser?.ministryId;
+    const isAuthority = currentUser?.type === 'admin' || myMinistryId === 'm2' || currentUser?.roleIds?.includes('r_justice');
 
     // State
     const [activeTab, setActiveTab] = useState(isAuthority ? 'records' : 'myrecords');

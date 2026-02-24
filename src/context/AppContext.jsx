@@ -26,7 +26,8 @@ export const AppProvider = ({ children }) => {
   const [wikiEntries, setWikiEntries] = useState([]);
   const [incidents, setIncidents] = useState([]);
   const [teacherMessages, setTeacherMessages] = useState([]);
-  const [roles, setRoles] = useState(INITIAL_DATA.roles);
+  const [roles, setRoles] = useState([]);
+  const [ministries, setMinistries] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
   const [currentTimetable, setCurrentTimetable] = useState({ periods: Array(6).fill('') });
   const [loading, setLoading] = useState(true);
@@ -43,6 +44,26 @@ export const AppProvider = ({ children }) => {
         const usersList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         // Sort specifically to keep admin at bottom or consistent order if needed
         setUsers(usersList.sort((a,b) => a.name.localeCompare(b.name)));
+      }
+    });
+
+    // Listen to Ministries
+    const unsubMinistries = onSnapshot(collection(db, 'ministries'), (snapshot) => {
+      if (snapshot.empty) {
+        seedMinistries();
+      } else {
+        const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setMinistries(list.sort((a,b) => a.id.localeCompare(b.id)));
+      }
+    });
+
+    // Listen to Roles
+    const unsubRoles = onSnapshot(collection(db, 'roles'), (snapshot) => {
+      if (snapshot.empty) {
+        seedRoles();
+      } else {
+        const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setRoles(list.sort((a,b) => a.id.localeCompare(b.id)));
       }
     });
 
@@ -101,27 +122,83 @@ export const AppProvider = ({ children }) => {
         }
     );
 
-    // Daily task reset: reset all tasks to 'pending' at the start of each new day
+    // Daily and Weekly task reset
     const checkAndResetTasks = async () => {
-        const today = getLocalDateString(new Date());
-        const resetRef = doc(db, 'settings', 'dailyReset');
+        const now = new Date();
+        // 8시간(8 * 60 * 60 * 1000 ms)을 빼서 오전 8시를 자정처럼 처리
+        // 예: 25일 오전 7시 59분 -> 24일 오후 11시 59분으로 계산되어 24일로 취급됨. 
+        // 25일 오전 8시 00분 -> 25일 오전 0시 00분으로 계산되어 25일로 취급됨.
+        const resetBoundaryDate = new Date(now.getTime() - (8 * 60 * 60 * 1000));
+        
+        const todayStr = getLocalDateString(resetBoundaryDate);
+        const isMonday = resetBoundaryDate.getDay() === 1; // 0 is Sunday, 1 is Monday
+
+        const resetRef = doc(db, 'settings', 'taskResets');
         const resetSnap = await getDoc(resetRef);
-        if (!resetSnap.exists() || resetSnap.data().lastResetDate !== today) {
-            console.log('Daily task reset for:', today);
+        
+        let lastDailyReset = null;
+        let lastWeeklyReset = null;
+
+        if (resetSnap.exists()) {
+            lastDailyReset = resetSnap.data().lastDailyReset;
+            lastWeeklyReset = resetSnap.data().lastWeeklyReset;
+        }
+
+        const needsDailyReset = lastDailyReset !== todayStr;
+        
+        // Date difference to prevent resetting multiple times on same Monday
+        let needsWeeklyReset = false;
+        if (isMonday) {
+            if (!lastWeeklyReset) {
+                 needsWeeklyReset = true;
+            } else {
+                 const diffTime = Math.abs(resetBoundaryDate - new Date(lastWeeklyReset));
+                 const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+                 // If it's Monday and the last weekly reset was more than 3 days ago, it's a new week
+                 if (diffDays > 3) needsWeeklyReset = true;
+            }
+        }
+
+        if (needsDailyReset || needsWeeklyReset) {
+            console.log(`Task reset triggered. Daily: ${needsDailyReset}, Weekly: ${needsWeeklyReset}`);
             const tasksSnap = await getDocs(collection(db, 'tasks'));
             const batch = writeBatch(db);
+            
             tasksSnap.docs.forEach(taskDoc => {
-                batch.update(taskDoc.ref, { status: 'pending' });
+                const taskData = taskDoc.data();
+                const freqType = taskData.frequency?.type || 'daily'; // Default to daily if undefined
+                
+                let shouldResetThisTask = false;
+
+                if (needsDailyReset && (freqType === 'daily' || freqType === 'specific_days')) {
+                    shouldResetThisTask = true;
+                }
+                if (needsWeeklyReset && freqType === 'weekly') {
+                    shouldResetThisTask = true;
+                }
+
+                if (shouldResetThisTask) {
+                    batch.update(taskDoc.ref, { status: 'pending' });
+                }
             });
-            batch.set(resetRef, { lastResetDate: today });
+
+            // Save reset timestamps
+            const newResetData = {
+                lastDailyReset: needsDailyReset ? todayStr : lastDailyReset,
+                lastWeeklyReset: needsWeeklyReset ? todayStr : lastWeeklyReset
+            };
+            
+            batch.set(resetRef, newResetData, { merge: true });
             await batch.commit();
-            console.log('Daily task reset complete.');
+            console.log('Task reset complete.', newResetData);
         }
     };
     checkAndResetTasks();
 
     return () => {
       unsubUsers();
+      unsubMinistries();
+      unsubRoles();
       unsubTasks();
       unsubWiki();
       unsubIncidents();
@@ -147,6 +224,25 @@ export const AppProvider = ({ children }) => {
 
     await batch.commit();
     console.log("Seeding complete!");
+  };
+
+  const seedMinistries = async () => {
+    const batch = writeBatch(db);
+    INITIAL_DATA.ministries.forEach(ministry => {
+      const ref = doc(db, 'ministries', ministry.id);
+      batch.set(ref, ministry);
+    });
+    await batch.commit();
+  };
+
+  const seedRoles = async () => {
+    const batch = writeBatch(db);
+    INITIAL_DATA.roles.forEach(role => {
+      const ref = doc(db, 'roles', role.id);
+      // Ensure duties is at least an empty array
+      batch.set(ref, { ...role, duties: role.duties || [] });
+    });
+    await batch.commit();
   };
 
   const seedWiki = async (itemsToSeed) => {
@@ -217,14 +313,47 @@ export const AppProvider = ({ children }) => {
     await updateDoc(taskRef, { status: 'verified' });
   };
 
-  const assignRole = async (userId, newRoleId) => {
+  const assignStudentRoles = async (userId, ministryId, roleIds) => {
     const userRef = doc(db, 'users', userId);
-    await updateDoc(userRef, { roleId: newRoleId });
+    await updateDoc(userRef, { ministryId, roleIds });
   };
 
   const updatePassword = async (userId, newPassword) => {
     const userRef = doc(db, 'users', userId);
     await updateDoc(userRef, { password: newPassword });
+  };
+  const addMinistry = async (data) => {
+    await addDoc(collection(db, 'ministries'), data);
+  };
+  const updateMinistry = async (id, data) => {
+    await updateDoc(doc(db, 'ministries', id), data);
+  };
+  const deleteMinistry = async (id) => {
+    await deleteDoc(doc(db, 'ministries', id));
+  };
+
+  const addRole = async (data) => {
+    await addDoc(collection(db, 'roles'), data);
+  };
+  const updateRole = async (id, data) => {
+    await updateDoc(doc(db, 'roles', id), data);
+  };
+  const deleteRole = async (id) => {
+    await deleteDoc(doc(db, 'roles', id));
+  };
+
+  const adminAddTask = async (task) => {
+    await addDoc(collection(db, 'tasks'), {
+        ...task,
+        status: 'pending',
+        frequency: task.frequency || { type: 'daily', days: [] }
+    });
+  };
+  const updateTask = async (id, data) => {
+    await updateDoc(doc(db, 'tasks', id), data);
+  };
+  const deleteTask = async (id) => {
+    await deleteDoc(doc(db, 'tasks', id));
   };
 
   const addUser = async (name) => {
@@ -232,7 +361,8 @@ export const AppProvider = ({ children }) => {
       name,
       type: 'student',
       password: '1234', // Default password
-      roleId: null
+      ministryId: null,
+      roleIds: []
     });
   };
 
@@ -345,11 +475,14 @@ export const AppProvider = ({ children }) => {
 
   return (
     <AppContext.Provider value={{
-      users, roles, tasks, wikiEntries, incidents, teacherMessages,
+      users, roles, ministries, tasks, wikiEntries, incidents, teacherMessages,
       currentUser,
       loading,
       login, logout,
-      toggleTask, verifyTask, assignRole, updatePassword,
+      toggleTask, verifyTask, assignStudentRoles, updatePassword,
+      addMinistry, updateMinistry, deleteMinistry,
+      addRole, updateRole, deleteRole,
+      adminAddTask, updateTask, deleteTask,
       addUser, deleteUser,
       addWikiEntry, updateWikiEntry, deleteWikiEntry,
       addIncident, updateIncident, deleteIncident,

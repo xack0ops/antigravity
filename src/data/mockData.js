@@ -129,12 +129,12 @@ export const INITIAL_DATA = {
   
   // Sample Users
   users: [
-    { id: 'u1', name: '김철수', roleId: 'r_president', type: 'student', password: '1234' },
-    { id: 'u2', name: '이영희', roleId: 'r_police', type: 'student', password: '1234' },
-    { id: 'u3', name: '박민수', roleId: 'r_store', type: 'student', password: '1234' },
-    { id: 'u4', name: '최지우', roleId: 'r_dj', type: 'student', password: '1234' },
-    { id: 'u5', name: '정우성', roleId: 'r_avengers', type: 'student', password: '1234' },
-    { id: 'u_admin', name: '선생님', roleId: null, type: 'admin', password: '1234' },
+    { id: 'u1', name: '김철수', ministryId: 'm1', roleIds: ['r_president'], type: 'student', password: '1234' },
+    { id: 'u2', name: '이영희', ministryId: 'm2', roleIds: ['r_police'], type: 'student', password: '1234' },
+    { id: 'u3', name: '박민수', ministryId: 'm3', roleIds: ['r_store'], type: 'student', password: '1234' },
+    { id: 'u4', name: '최지우', ministryId: 'm5', roleIds: ['r_dj'], type: 'student', password: '1234' },
+    { id: 'u5', name: '정우성', ministryId: 'm6', roleIds: ['r_avengers'], type: 'student', password: '1234' },
+    { id: 'u_admin', name: '선생님', ministryId: null, roleIds: [], type: 'admin', password: '1234' },
   ],
 
   // Initial Tasks reflecting the duties

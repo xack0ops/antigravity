@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { LogOut, CheckCircle2, KeyRound, UserPlus, Trash2, ChevronDown, ChevronUp, BookOpen, Wrench, Calendar, X, Scale, BellRing, Sheet, Loader2, ExternalLink } from 'lucide-react';
+import { LogOut, CheckCircle2, KeyRound, UserPlus, Trash2, ChevronDown, ChevronUp, BookOpen, Wrench, Calendar, X, Scale, BellRing, Sheet, Loader2, ExternalLink, Shield } from 'lucide-react';
 import { db } from '../firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { GOOGLE_CLIENT_ID, GOOGLE_SHEETS_SCOPE } from '../googleConfig';
@@ -9,9 +9,10 @@ import { INITIAL_DATA, CURRICULUM_DATA } from '../data/mockData';
 import { getLocalDateString } from '../utils/dateUtils';
 import TimetableEditor from './TimetableEditor';
 import WikiManager from './WikiManager';
+import JobManagement from './features/JobManagement';
 
 const AdminDashboard = () => {
-  const { users, roles, tasks, assignRole, verifyTask, updatePassword, addUser, deleteUser, logout, fetchAllTimetables, saveTimetable, teacherMessages, deleteTeacherMessage } = useAppContext();
+  const { users, roles, tasks, ministries, assignStudentRoles, verifyTask, updatePassword, addUser, deleteUser, logout, fetchAllTimetables, saveTimetable, teacherMessages, deleteTeacherMessage, currentUser } = useAppContext();
   const [activeTab, setActiveTab] = useState('management'); // 'management', 'curriculum', 'tools', 'judicial', 'messages'
   const [activeTool, setActiveTool] = useState(null); // 'timetable', etc.
   
@@ -68,6 +69,10 @@ const AdminDashboard = () => {
   const [editingPasswordId, setEditingPasswordId] = useState(null);
   const [newPassword, setNewPassword] = useState('');
   
+  // Admin Password
+  const [adminPassword, setAdminPassword] = useState('');
+  const [isEditingAdminPw, setIsEditingAdminPw] = useState(false);
+  
   // New User State
   const [newStudentName, setNewStudentName] = useState('');
   const [isAddingStudent, setIsAddingStudent] = useState(false);
@@ -78,19 +83,13 @@ const AdminDashboard = () => {
   const students = users.filter(u => u.type === 'student').sort((a,b) => a.name.localeCompare(b.name));
   const pendingTasks = tasks.filter(t => t.status === 'waiting_approval');
 
-  const getRoleName = (roleId) => {
-    return roles.find(r => r.id === roleId)?.name || '역할 없음';
-  };
-
   const getStudentName = (roleId) => {
-      const student = students.find(s => s.roleId === roleId);
+      const student = students.find(s => s.roleIds?.includes(roleId));
       return student ? student.name : '알 수 없음';
   };
 
-  const getMinistryColor = (roleId) => {
-    const role = roles.find(r => r.id === roleId);
-    if (!role) return 'text-gray-500 bg-gray-100';
-    const ministry = INITIAL_DATA.ministries.find(m => m.id === role.ministryId);
+  const getMinistryColor = (ministryId) => {
+    const ministry = ministries.find(m => m.id === ministryId);
     return ministry ? ministry.color : 'text-gray-500 bg-gray-100';
   };
 
@@ -122,8 +121,8 @@ const AdminDashboard = () => {
 
   // Progress Calculation
   const getStudentProgress = (student) => {
-      if (!student.roleId) return { total: 0, done: 0, percent: 0 };
-      const studentTasks = tasks.filter(t => t.roleId === student.roleId);
+      if (!student.roleIds || student.roleIds.length === 0) return { total: 0, done: 0, percent: 0 };
+      const studentTasks = tasks.filter(t => student.roleIds.includes(t.roleId));
       if (studentTasks.length === 0) return { total: 0, done: 0, percent: 0 };
 
       // Done = verified AND completed (self)
@@ -148,10 +147,41 @@ const AdminDashboard = () => {
           <h1 className="text-3xl font-bold text-gray-800">선생님 대시보드</h1>
           <p className="text-gray-500">학생들의 역할을 관리하고 업무를 승인해주세요.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+            {isEditingAdminPw ? (
+                <div className="flex items-center gap-1">
+                    <input 
+                        type="text" 
+                        value={adminPassword}
+                        onChange={(e) => setAdminPassword(e.target.value)}
+                        placeholder="새 비밀번호"
+                        className="px-2 py-1.5 border rounded-lg text-sm outline-none w-28"
+                    />
+                    <button 
+                        onClick={() => {
+                            if(adminPassword) {
+                                updatePassword(currentUser.id, adminPassword);
+                                alert('비밀번호가 변경되었습니다.');
+                            }
+                            setIsEditingAdminPw(false);
+                            setAdminPassword('');
+                        }}
+                        className="bg-blue-500 text-white px-3 py-1.5 rounded-lg text-sm font-bold"
+                    >확인</button>
+                    <button onClick={() => setIsEditingAdminPw(false)} className="bg-gray-200 px-3 py-1.5 rounded-lg text-sm font-bold">취소</button>
+                </div>
+            ) : (
+                <button 
+                    onClick={() => setIsEditingAdminPw(true)}
+                    className="flex items-center px-4 py-2 bg-white text-gray-700 rounded-lg shadow-sm hover:bg-gray-50 border border-gray-200 gap-2 text-sm font-bold"
+                >
+                    <KeyRound className="w-4 h-4" />
+                    내 수첩(비번) 변경
+                </button>
+            )}
             <button 
             onClick={logout}
-            className="flex items-center px-4 py-2 bg-white text-gray-700 rounded-lg shadow-sm hover:bg-gray-50 border border-gray-200 gap-2"
+            className="flex items-center px-4 py-2 bg-white text-gray-700 rounded-lg shadow-sm hover:bg-gray-50 border border-gray-200 gap-2 font-bold text-sm"
             >
             <LogOut className="w-4 h-4" />
             로그아웃
@@ -312,7 +342,7 @@ const AdminDashboard = () => {
                                             <p className="text-sm text-gray-400 italic">부여된 역할/업무가 없습니다.</p>
                                         ) : (
                                             <div className="space-y-2">
-                                                {tasks.filter(t => t.roleId === student.roleId).map(task => { // Need context tasks
+                                                {tasks.filter(t => student.roleIds?.includes(t.roleId)).map(task => { // Need context tasks
                                                     let statusColor = "bg-gray-100 text-gray-400"; // Pending self or not started
                                                     let statusText = "미완료";
                                                     
@@ -338,47 +368,71 @@ const AdminDashboard = () => {
                                     </div>
 
                                     {/* Admin Actions */}
-                                    <div className="grid grid-cols-2 gap-3 bg-gray-50 p-3 rounded-xl border border-gray-100">
-                                        {/* Role Select */}
+                                    <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 mb-3 space-y-4">
+                                        {/* Ministry Select */}
                                         <div>
-                                            <label className="text-xs text-gray-500 font-bold mb-1 block">역할 변경</label>
+                                            <label className="text-xs text-gray-500 font-bold mb-1 block">소속 부서</label>
                                             <select 
-                                            className="w-full px-2 py-1.5 border rounded-lg bg-white text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                                            value={student.roleId || ''}
-                                            onChange={(e) => assignRole(student.id, e.target.value)}
-                                            onClick={(e) => e.stopPropagation()}
+                                                className="w-full px-2 py-1.5 border rounded-lg bg-white text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                                value={student.ministryId || ''}
+                                                onChange={(e) => assignStudentRoles(student.id, e.target.value, [])}
+                                                onClick={(e) => e.stopPropagation()}
                                             >
-                                            <option value="">역할 없음</option>
-                                            {roles.map(role => (
-                                                <option key={role.id} value={role.id}>
-                                                {role.name}
-                                                </option>
-                                            ))}
+                                                <option value="">부서 없음</option>
+                                                {ministries.map(m => (
+                                                    <option key={m.id} value={m.id}>{m.name}</option>
+                                                ))}
                                             </select>
                                         </div>
 
+                                        {/* Roles Checkboxes */}
+                                        {student.ministryId && (
+                                            <div>
+                                                <label className="text-xs text-gray-500 font-bold mb-2 block">역할 부여 (다중 선택 가능)</label>
+                                                <div className="grid grid-cols-2 gap-2" onClick={(e) => e.stopPropagation()}>
+                                                    {roles.filter(r => r.ministryId === student.ministryId).map(role => (
+                                                        <label key={role.id} className="flex items-center gap-2 text-sm bg-white p-2 rounded-lg border border-gray-100 cursor-pointer hover:bg-blue-50 transition-colors">
+                                                            <input 
+                                                                type="checkbox"
+                                                                className="rounded text-blue-500 border-gray-300 w-4 h-4"
+                                                                checked={student.roleIds?.includes(role.id)}
+                                                                onChange={(e) => {
+                                                                    const checked = e.target.checked;
+                                                                    let newRoles = [...(student.roleIds || [])];
+                                                                    if(checked) newRoles.push(role.id);
+                                                                    else newRoles = newRoles.filter(id => id !== role.id);
+                                                                    assignStudentRoles(student.id, student.ministryId, newRoles);
+                                                                }}
+                                                            />
+                                                            {role.name}
+                                                        </label>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                        
                                         {/* Password Change */}
-                                        <div>
-                                            <label className="text-xs text-gray-500 font-bold mb-1 block">비밀번호 변경</label>
+                                        <div className="pt-3 border-t border-gray-200">
+                                            <label className="text-xs text-gray-500 font-bold mb-2 block">비밀번호 변경</label>
                                             {editingPasswordId === student.id ? (
                                                 <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
                                                     <input 
                                                         type="text" 
-                                                        className="w-full px-2 py-1.5 border border-blue-300 rounded-lg text-sm outline-none"
+                                                        className="w-full max-w-[150px] px-2 py-1.5 border border-blue-300 rounded-lg text-sm outline-none"
                                                         placeholder="새 암호"
                                                         value={newPassword}
                                                         onChange={(e) => setNewPassword(e.target.value)}
                                                         autoFocus
                                                     />
-                                                    <button onClick={() => handlePasswordUpdate(student.id)} className="bg-blue-500 text-white px-2 rounded-lg text-xs">확인</button>
+                                                    <button onClick={() => handlePasswordUpdate(student.id)} className="bg-blue-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold">확인</button>
                                                 </div>
                                             ) : (
                                                 <button 
                                                     onClick={(e) => { e.stopPropagation(); setEditingPasswordId(student.id); setNewPassword(''); }}
-                                                    className="w-full px-2 py-1.5 border border-gray-200 bg-white hover:bg-gray-100 text-gray-600 rounded-lg text-sm flex items-center justify-center gap-1"
+                                                    className="w-auto px-3 py-1.5 border border-gray-200 bg-white hover:bg-gray-100 text-gray-600 rounded-lg text-sm flex items-center justify-center gap-1 font-bold transition-colors"
                                                 >
                                                     <KeyRound className="w-3 h-3" />
-                                                    변경하기
+                                                    새 비밀번호 설정
                                                 </button>
                                             )}
                                         </div>
@@ -416,7 +470,7 @@ const AdminDashboard = () => {
                         <div className="space-y-3">
                         {pendingTasks.map(task => {
                             const role = roles.find(r => r.id === task.roleId);
-                            const ministry = INITIAL_DATA.ministries.find(m => m.id === role?.ministryId);
+                            const ministry = ministries.find(m => m.id === role?.ministryId);
                             
                             return (
                             <div key={task.id} className="flex items-center justify-between p-4 bg-yellow-50 border border-yellow-100 rounded-lg shadow-sm">
@@ -488,23 +542,25 @@ const AdminDashboard = () => {
                             </button>
 
                              <button 
-                                className="bg-gray-50 p-8 rounded-2xl border border-dashed border-gray-200 flex flex-col items-center gap-4 opacity-60 cursor-not-allowed"
+                                onClick={() => setActiveTool('job_management')}
+                                className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md hover:border-indigo-200 transition-all flex flex-col items-center gap-4 group"
                             >
-                                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
-                                    <Wrench className="w-8 h-8 text-gray-400" />
+                                <div className="w-16 h-16 bg-indigo-50 rounded-full flex items-center justify-center group-hover:bg-indigo-600 transition-colors">
+                                    <Shield className="w-8 h-8 text-indigo-600 group-hover:text-white transition-colors" />
                                 </div>
                                 <div className="text-center">
-                                    <h3 className="font-bold text-lg text-gray-500">환경 설정</h3>
-                                    <p className="text-gray-400 text-sm mt-1">준비중...</p>
+                                    <h3 className="font-bold text-lg text-gray-800">업무 및 부서 관리</h3>
+                                    <p className="text-gray-400 text-sm mt-1">부서/역할/할 일 설정</p>
                                 </div>
                             </button>
                         </div>
                     ) : (
                         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 animate-in fade-in zoom-in-95 duration-200">
                              <div className="flex items-center justify-between mb-6 border-b border-gray-100 pb-4">
-                                <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                                 <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
                                      {activeTool === 'timetable_editor' && <><Calendar className="w-6 h-6 text-indigo-600"/> 시간표 관리자</>}
                                      {activeTool === 'wiki_manager' && <><BookOpen className="w-6 h-6 text-indigo-600"/> 물어보살 관리자</>}
+                                     {activeTool === 'job_management' && <><Shield className="w-6 h-6 text-indigo-600"/> 업무 관리 (조직도 구성)</>}
                                 </h3>
                                 <button 
                                     onClick={() => setActiveTool(null)}
@@ -519,6 +575,9 @@ const AdminDashboard = () => {
                              )}
                              {activeTool === 'wiki_manager' && (
                                  <WikiManager onClose={() => setActiveTool(null)} />
+                             )}
+                             {activeTool === 'job_management' && (
+                                 <JobManagement />
                              )}
                         </div>
                     )}
