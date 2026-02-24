@@ -662,8 +662,8 @@ const JudicialSystem = () => {
                         </div>
                     </div>
 
-                    {/* Top Students */}
-                    {stats.topStudents.length > 0 && (
+                    {/* Top Students - admin only */}
+                    {currentUser?.type === 'admin' && stats.topStudents.length > 0 && (
                         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
                             <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><Users className="w-5 h-5 text-slate-600" /> 관련 빈도 상위 학생</h3>
                             <div className="space-y-2">

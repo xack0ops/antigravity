@@ -54,7 +54,7 @@ const MyJob = ({ onNavigate }) => {
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
             {/* Role Card */}
-            <div className={`rounded-2xl p-6 border ${roleColor} relative overflow-hidden transition-all shadow-sm bg-white`}>
+            <div className={`rounded-2xl p-6 md:p-8 border ${roleColor} relative overflow-hidden transition-all shadow-sm bg-white`}>
                 <div className="absolute top-0 right-0 p-4 opacity-10">
                     <Info size={100} />
                 </div>
@@ -64,12 +64,12 @@ const MyJob = ({ onNavigate }) => {
                             {myMinistry?.name || '소속 없음'}
                         </span>
                     </div>
-                    <h1 className="text-3xl font-black mb-2 text-gray-800">{myRole.name}</h1>
-                    <p className="text-lg font-medium text-gray-600 mb-4">{myRole.description}</p>
+                    <h1 className="text-3xl md:text-4xl font-black mb-2 text-gray-800">{myRole.name}</h1>
+                    <p className="text-lg md:text-xl font-medium text-gray-600 mb-4">{myRole.description}</p>
                     
                     <button 
                         onClick={() => setShowPopup(true)} 
-                        className="inline-flex items-center gap-1 text-sm font-bold underline opacity-80 hover:opacity-100 text-gray-700"
+                        className="inline-flex items-center gap-1 text-sm font-bold underline opacity-80 hover:opacity-100 text-gray-700 py-2"
                     >
                         나의 임무 다시보기
                     </button>
@@ -78,13 +78,13 @@ const MyJob = ({ onNavigate }) => {
 
             {/* Task List */}
             <div>
-                <div className="flex flex-col gap-3 mb-4">
-                    <h3 className="text-xl font-bold text-gray-800">오늘의 할 일</h3>
+                <div className="flex flex-col gap-3 mb-5">
+                    <h3 className="text-xl md:text-2xl font-bold text-gray-800">오늘의 할 일</h3>
                     <button
                         onClick={() => setShowMessageModal(true)}
-                        className="flex items-center justify-center gap-2 bg-amber-400 hover:bg-amber-500 active:bg-amber-600 text-white px-4 py-3 rounded-xl font-bold text-sm transition-all shadow-md w-full"
+                        className="flex items-center justify-center gap-2 bg-amber-400 hover:bg-amber-500 active:bg-amber-600 text-white px-4 py-4 rounded-2xl font-bold text-base transition-all shadow-md w-full"
                     >
-                        <BellRing className="w-4 h-4" />
+                        <BellRing className="w-5 h-5" />
                         선생님께 꼭 전달할 말이 있어요 🔔
                     </button>
                 </div>
@@ -127,7 +127,7 @@ const MyJob = ({ onNavigate }) => {
                             </p>
                         </div>
                         <textarea
-                            className="w-full border-2 border-gray-200 rounded-2xl p-4 text-sm resize-none focus:outline-none focus:border-amber-400 transition-colors h-36"
+                            className="w-full border-2 border-gray-200 rounded-2xl p-4 text-base resize-none focus:outline-none focus:border-amber-400 transition-colors h-44"
                             placeholder="선생님께 꼭 전달해야 할 내용을 써주세요..."
                             value={messageText}
                             onChange={(e) => setMessageText(e.target.value)}
@@ -221,25 +221,31 @@ const TaskItem = ({ task, toggleTask, onNavigate }) => {
     return (
       <div 
         className={`
-          flex items-center gap-4 p-4 rounded-xl border-2 transition-all duration-200
+          flex items-center gap-4 p-5 rounded-2xl border-2 transition-all duration-200
           ${borderClass} ${bgClass}
-          ${!isCompleted ? 'hover:shadow-md hover:border-blue-300' : ''}
+          ${!isCompleted ? 'hover:shadow-md hover:border-blue-300 active:scale-[0.99]' : ''}
         `}
       >
-        <div onClick={!isCompleted ? handleClick : undefined} className="shrink-0 cursor-pointer">{icon}</div>
+        <div onClick={!isCompleted ? handleClick : undefined} className="shrink-0 cursor-pointer p-1">
+          {isCompleted
+            ? <CheckCircle2 className="w-8 h-8 text-green-500" />
+            : isPending
+              ? <Clock className="w-8 h-8 text-yellow-500 animate-pulse" />
+              : <Circle className="w-8 h-8 text-gray-300" />}
+        </div>
         <div className="flex-1">
-          <p onClick={!isCompleted ? handleClick : undefined} className={`font-bold text-lg ${textClass} cursor-pointer`}>
+          <p onClick={!isCompleted ? handleClick : undefined} className={`font-bold text-lg md:text-xl ${textClass} cursor-pointer leading-snug`}>
             {task.text}
           </p>
           
-          <div className="flex justify-between items-center mt-1">
+          <div className="flex justify-between items-center mt-2">
               <div className="flex gap-2">
                 {isAdminTask ? (
-                    <span className={`text-xs font-bold px-2 py-0.5 rounded ${isCompleted ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
+                    <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${isCompleted ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
                         {isCompleted ? '선생님 확인 완료' : (isPending ? '검사 대기중...' : '선생님 확인 필요')}
                     </span>
                 ) : (
-                    <span className={`text-xs font-bold px-2 py-0.5 rounded ${isCompleted ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                    <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${isCompleted ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
                         {isCompleted ? '완료됨' : '스스로 체크'}
                     </span>
                 )}
@@ -255,7 +261,7 @@ const TaskItem = ({ task, toggleTask, onNavigate }) => {
                             }
                         }
                     }}
-                    className="bg-indigo-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm ml-auto animate-pulse hover:animate-none"
+                    className="bg-indigo-600 text-white text-sm font-bold px-4 py-2 rounded-xl hover:bg-indigo-700 transition-colors shadow-sm ml-auto animate-pulse hover:animate-none"
                     title="업무 도구 열기"
                 >
                     실행하기 →

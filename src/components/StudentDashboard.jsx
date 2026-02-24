@@ -97,27 +97,27 @@ const StudentDashboard = () => {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Navbar */}
-      <nav className="bg-white shadow-sm border-b border-gray-100 px-6 py-4 flex justify-between items-center sticky top-0 z-10">
-        <div className="font-bold text-gray-800 text-lg flex items-center gap-2">
-          <span className="text-xl">🏫</span> 우리 반 나라
+      <nav className="bg-white shadow-sm border-b border-gray-100 px-6 py-4 md:py-5 md:px-8 flex justify-between items-center sticky top-0 z-10">
+        <div className="font-bold text-gray-800 text-lg md:text-xl flex items-center gap-2">
+          <span className="text-xl md:text-2xl">🏫</span> 우리 반 나라
         </div>
-        <div className="flex items-center gap-4">
-          <span className="text-gray-600 font-bold">{currentUser.name} {currentUser.type === 'student' ? '학생' : '선생님'}</span>
-          <button onClick={logout} className="text-gray-400 hover:text-gray-600 bg-gray-100 p-2 rounded-full">
+        <div className="flex items-center gap-3">
+          <span className="text-gray-600 font-bold text-sm md:text-base">{currentUser.name} {currentUser.type === 'student' ? '학생' : '선생님'}</span>
+          <button onClick={logout} className="text-gray-400 hover:text-red-500 bg-gray-100 hover:bg-red-50 p-2.5 rounded-full transition-colors">
             <LogOut className="w-5 h-5" />
           </button>
         </div>
       </nav>
 
       {showJudicial ? (
-        <main className="flex-1 max-w-2xl w-full mx-auto p-6 space-y-6 pb-32">
-          <button onClick={() => setShowJudicial(false)} className="flex items-center gap-2 text-gray-500 font-bold hover:text-gray-800 mb-4">
+        <main className="flex-1 max-w-2xl w-full mx-auto p-4 md:p-6 space-y-6 pb-32">
+          <button onClick={() => setShowJudicial(false)} className="flex items-center gap-2 text-gray-500 font-bold hover:text-gray-800 mb-4 py-3 px-4 rounded-xl hover:bg-gray-100 transition-colors">
             <ChevronLeft className="w-5 h-5" /> 돌아가기
           </button>
           <JudicialSystem />
         </main>
       ) : (
-        <main className="flex-1 max-w-2xl w-full mx-auto p-6 space-y-6 pb-32">
+        <main className="flex-1 max-w-2xl w-full mx-auto p-4 md:p-6 space-y-6 pb-32">
           {/* Judicial System Card */}
           {canAccessJudicial && (
             <div onClick={() => setShowJudicial(true)} className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 hover:border-slate-400 cursor-pointer group transition-all">
@@ -206,10 +206,10 @@ const StudentDashboard = () => {
                 선생님께 꼭 전달할 말이 있어요 🔔
               </button>
             </div>
-            <div className="space-y-3">
+            <div className="space-y-3 md:space-y-4">
               {myTasks.length === 0 ? (
-                <div className="p-8 text-center bg-white rounded-xl border border-dashed border-gray-200 text-gray-400">
-                  <p>부여된 업무가 없습니다. 자유시간!</p>
+                <div className="p-10 text-center bg-white rounded-xl border border-dashed border-gray-200 text-gray-400">
+                  <p className="text-base">부여된 업무가 없습니다. 자유시간!</p>
                 </div>
               ) : (
                 myTasks.map(task => (
@@ -223,13 +223,13 @@ const StudentDashboard = () => {
 
       {/* Floating Buttons */}
       <a href="https://drive.google.com/drive/folders/1bcfiobJCVe5jgupNddCugfMImnwPZh8E?usp=drive_link" target="_blank" rel="noopener noreferrer"
-        className="fixed bottom-24 right-6 flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-5 py-3 rounded-full shadow-lg transition-all hover:scale-105 z-40 group">
+        className="fixed bottom-28 right-5 md:bottom-32 md:right-8 flex items-center gap-2 bg-green-600 active:bg-green-800 hover:bg-green-700 text-white px-5 py-3.5 rounded-full shadow-lg transition-all hover:scale-105 z-40 group">
         <FolderDown className="w-6 h-6" />
         <span className="font-bold">양식 자료실</span>
         <div className="absolute -top-12 right-0 bg-white text-gray-800 text-xs font-bold px-3 py-1.5 rounded-lg shadow-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">필요한 양식을 다운로드하세요!</div>
       </a>
       <a href="https://notebooklm.google.com/notebook/0d29ee19-3edb-4d83-aaab-924ce33cf291" target="_blank" rel="noopener noreferrer"
-        className="fixed bottom-6 right-6 flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-3 rounded-full shadow-lg transition-all hover:scale-105 z-40 group">
+        className="fixed bottom-10 right-5 md:bottom-14 md:right-8 flex items-center gap-2 bg-indigo-600 active:bg-indigo-800 hover:bg-indigo-700 text-white px-5 py-3.5 rounded-full shadow-lg transition-all hover:scale-105 z-40 group">
         <MessageCircleQuestion className="w-6 h-6" />
         <span className="font-bold">AI 튜터에게 질문하기</span>
         <div className="absolute -top-12 right-0 bg-white text-gray-800 text-xs font-bold px-3 py-1.5 rounded-lg shadow-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">궁금한 점을 물어보세요!</div>
@@ -256,7 +256,7 @@ const StudentDashboard = () => {
               </p>
             </div>
             <textarea
-              className="w-full border-2 border-gray-200 rounded-2xl p-4 text-sm resize-none focus:outline-none focus:border-amber-400 transition-colors h-36"
+              className="w-full border-2 border-gray-200 rounded-2xl p-4 text-base resize-none focus:outline-none focus:border-amber-400 transition-colors h-44"
               placeholder="선생님께 꼭 전달해야 할 내용을 써주세요..."
               value={messageText}
               onChange={(e) => setMessageText(e.target.value)}
@@ -327,25 +327,31 @@ const TaskItem = ({ task, toggleTask, onAction }) => {
   }
 
   return (
-    <div className={`flex items-center gap-4 p-4 rounded-xl border-2 transition-all duration-200 ${borderClass} ${bgClass} ${!isCompleted ? 'hover:shadow-md hover:border-blue-300' : ''}`}>
-      <div onClick={!isCompleted ? () => toggleTask(task.id) : undefined} className="cursor-pointer shrink-0">{icon}</div>
+    <div className={`flex items-center gap-4 p-5 rounded-2xl border-2 transition-all duration-200 ${borderClass} ${bgClass} ${!isCompleted ? 'hover:shadow-md hover:border-blue-300 active:scale-[0.99]' : ''}`}>
+      <div onClick={!isCompleted ? () => toggleTask(task.id) : undefined} className="cursor-pointer shrink-0 p-1">
+        {isCompleted
+          ? <CheckCircle2 className="w-8 h-8 text-green-500" />
+          : isPending
+            ? <Clock className="w-8 h-8 text-yellow-500 animate-pulse" />
+            : <Circle className="w-8 h-8 text-gray-300" />}
+      </div>
       <div className="flex-1">
-        <p onClick={!isCompleted ? () => toggleTask(task.id) : undefined} className={`font-bold text-lg ${textClass} cursor-pointer`}>{task.text}</p>
-        <div className="flex justify-between items-center mt-1">
+        <p onClick={!isCompleted ? () => toggleTask(task.id) : undefined} className={`font-bold text-lg md:text-xl ${textClass} cursor-pointer leading-snug`}>{task.text}</p>
+        <div className="flex justify-between items-center mt-2">
           <div className="flex gap-2">
             {isAdminTask ? (
-              <span className={`text-xs font-bold px-2 py-0.5 rounded ${isCompleted ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
+              <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${isCompleted ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
                 {isCompleted ? '선생님 확인 완료' : (isPending ? '검사 대기중...' : '선생님 확인 필요')}
               </span>
             ) : (
-              <span className={`text-xs font-bold px-2 py-0.5 rounded ${isCompleted ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+              <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${isCompleted ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
                 {isCompleted ? '완료됨' : '스스로 체크'}
               </span>
             )}
           </div>
           {(task.action || task.id === 't3' || task.id === 't11' || task.id === 't10') && (
             <button onClick={(e) => { e.stopPropagation(); onAction(task.action || 'open_judicial'); }}
-              className="bg-indigo-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm animate-pulse hover:animate-none ml-auto">
+              className="bg-indigo-600 text-white text-sm font-bold px-4 py-2 rounded-xl hover:bg-indigo-700 transition-colors shadow-sm animate-pulse hover:animate-none ml-auto">
               실행하기 →
             </button>
           )}

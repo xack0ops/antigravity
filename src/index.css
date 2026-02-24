@@ -5,5 +5,26 @@
 @layer base {
   body {
     @apply bg-gray-50 text-gray-900 font-sans antialiased;
+    /* 태블릿 터치 딜레이 300ms 제거 */
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* iOS 자동 확대 방지 */
+  input, textarea, select {
+    font-size: 16px;
+  }
+
+  /* 터치 기기 스크롤바 최적화 */
+  * {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@layer utilities {
+  /* 터치 타겟 최소 크기 보장 */
+  .touch-target {
+    min-height: 48px;
+    min-width: 48px;
   }
 }
