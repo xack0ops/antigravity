@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../../context/AppContext';
-import { Info, Circle, CheckCircle2, Clock, X, BellRing, Send } from 'lucide-react';
+import { Info, Circle, CheckCircle2, Clock, X, BellRing, Send, Star } from 'lucide-react';
+import ScoreManager from './ScoreManager';
 
 const MyJob = ({ onNavigate }) => {
     const { currentUser, tasks, roles, ministries, toggleTask, addTeacherMessage } = useAppContext();
@@ -14,6 +15,14 @@ const MyJob = ({ onNavigate }) => {
     const myMinistry = ministries.find(m => m.id === currentUser.ministryId);
     const myRoles = roles.filter(r => currentUser.roleIds?.includes(r.id));
     const roleColor = myMinistry ? myMinistry.color : 'border-gray-200 bg-gray-50';
+
+    // 점수 관리 권한: 행정안전부원 or 대통령 역할 or 관리자
+    const canManageScore =
+        currentUser.type === 'admin' ||
+        myMinistry?.name === '행정안전부' ||
+        myRoles.some(r => r.name === '대통령');
+
+    const [showScoreManager, setShowScoreManager] = useState(false);
     
     const myTasks = tasks.filter(t => {
         if (!currentUser.roleIds?.includes(t.roleId)) return false;
@@ -109,6 +118,30 @@ const MyJob = ({ onNavigate }) => {
                     )}
                 </div>
             </div>
+
+            {/* 점수 관리 카드 (행정안전부 / 대통령 전용) */}
+            {canManageScore && (
+                <div className="bg-amber-50 rounded-2xl border border-amber-100 overflow-hidden">
+                    <button
+                        onClick={() => setShowScoreManager(v => !v)}
+                        className="w-full flex items-center gap-3 px-6 py-4 hover:bg-amber-100 transition-colors"
+                    >
+                        <div className="w-10 h-10 bg-amber-400 rounded-xl flex items-center justify-center shrink-0">
+                            <Star className="w-5 h-5 text-white" />
+                        </div>
+                        <div className="flex-1 text-left">
+                            <p className="font-bold text-amber-900">생활태도 점수 관리</p>
+                            <p className="text-xs text-amber-600">학생에게 점수를 부여하거나 차감하세요</p>
+                        </div>
+                        <span className="text-amber-400 font-bold text-lg">{showScoreManager ? '▲' : '▼'}</span>
+                    </button>
+                    {showScoreManager && (
+                        <div className="px-4 pb-5 pt-2">
+                            <ScoreManager />
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* Teacher Message Modal */}
             {showMessageModal && (
@@ -269,6 +302,10 @@ const TaskItem = ({ task, toggleTask, onNavigate }) => {
                         if (onNavigate) {
                             if (task.action === 'open_judicial' || ['t3', 't10', 't11'].includes(task.id)) {
                                 onNavigate('judicial');
+                            } else if (task.action === 'open_petition') {
+                                onNavigate('petition');
+                            } else if (task.action === 'open_wiki') {
+                                onNavigate('wiki');
                             }
                         }
                     }}

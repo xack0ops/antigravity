@@ -14,8 +14,12 @@ const StudentDashboard = () => {
   const [messageText, setMessageText] = useState('');
   const [messageSending, setMessageSending] = useState(false);
   
-  const [studentPassword, setStudentPassword] = useState('');
-  const [isEditingPassword, setIsEditingPassword] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [pwCurrent, setPwCurrent] = useState('');
+  const [pwNew, setPwNew] = useState('');
+  const [pwConfirm, setPwConfirm] = useState('');
+  const [pwError, setPwError] = useState('');
+  const [pwSuccess, setPwSuccess] = useState(false);
 
   // Timetable State
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -112,37 +116,13 @@ const StudentDashboard = () => {
         <div className="flex items-center gap-3">
           <span className="text-gray-600 font-bold text-sm md:text-base hidden sm:inline-block">{currentUser.name} {currentUser.type === 'student' ? '학생' : '선생님'}</span>
           
-          {isEditingPassword ? (
-              <div className="flex items-center gap-1">
-                  <input 
-                      type="text" 
-                      value={studentPassword}
-                      onChange={(e) => setStudentPassword(e.target.value)}
-                      placeholder="새 비밀번호"
-                      className="px-2 py-1.5 border border-indigo-200 rounded-lg text-sm outline-none w-24 md:w-28 h-9 font-medium focus:ring-2 focus:ring-indigo-400"
-                  />
-                  <button 
-                      onClick={() => {
-                          if (studentPassword) {
-                              updatePassword(currentUser.id, studentPassword);
-                              alert('비밀번호가 변경되었습니다!');
-                          }
-                          setIsEditingPassword(false);
-                          setStudentPassword('');
-                      }}
-                      className="bg-indigo-500 hover:bg-indigo-600 text-white px-3 py-1.5 text-sm font-bold rounded-lg h-9 transition-colors"
-                  >변경</button>
-                  <button onClick={() => setIsEditingPassword(false)} className="bg-gray-100 hover:bg-gray-200 text-gray-600 px-2 py-1.5 text-sm font-bold rounded-lg h-9 transition-colors">취소</button>
-              </div>
-          ) : (
-              <button 
-                  onClick={() => setIsEditingPassword(true)}
-                  className="flex items-center gap-1 text-gray-500 hover:text-indigo-600 text-xs md:text-sm font-bold bg-gray-100 hover:bg-gray-200 px-2.5 md:px-3 py-2 rounded-lg transition-colors h-9"
-                  title="내 수첩 비밀번호 변경"
-              >
-                  <KeyRound className="w-4 h-4" /> <span className="hidden sm:inline-block">비번 변경</span>
-              </button>
-          )}
+          <button 
+              onClick={() => { setShowPasswordModal(true); setPwError(''); setPwSuccess(false); setPwCurrent(''); setPwNew(''); setPwConfirm(''); }}
+              className="flex items-center gap-1 text-gray-500 hover:text-indigo-600 text-xs md:text-sm font-bold bg-gray-100 hover:bg-gray-200 px-2.5 md:px-3 py-2 rounded-lg transition-colors h-9"
+              title="비밀번호 변경"
+          >
+              <KeyRound className="w-4 h-4" /> <span className="hidden sm:inline-block">비번 변경</span>
+          </button>
 
           <button onClick={logout} className="text-gray-500 hover:text-red-500 bg-gray-100 hover:bg-red-50 px-2.5 md:px-3 flex items-center gap-1 py-2 rounded-lg transition-colors h-9 font-bold">
             <LogOut className="w-4 h-4" /> <span className="hidden sm:inline-block">로그아웃</span>
@@ -279,6 +259,86 @@ const StudentDashboard = () => {
         <span className="font-bold">AI 튜터에게 질문하기</span>
         <div className="absolute -top-12 right-0 bg-white text-gray-800 text-xs font-bold px-3 py-1.5 rounded-lg shadow-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">궁금한 점을 물어보세요!</div>
       </a>
+
+      {/* Password Change Modal */}
+      {showPasswordModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl p-8 max-w-sm w-full relative shadow-2xl">
+            <button onClick={() => setShowPasswordModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+              <X size={24} />
+            </button>
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-12 h-12 bg-indigo-100 rounded-2xl flex items-center justify-center flex-shrink-0">
+                <KeyRound className="w-6 h-6 text-indigo-600" />
+              </div>
+              <h2 className="text-xl font-bold text-gray-800">비밀번호 변경</h2>
+            </div>
+
+            {pwSuccess ? (
+              <div className="text-center py-6">
+                <div className="text-5xl mb-4">✅</div>
+                <p className="font-bold text-green-600 text-lg">비밀번호가 변경되었습니다!</p>
+                <button onClick={() => setShowPasswordModal(false)} className="mt-6 w-full py-3 bg-gray-900 text-white rounded-xl font-bold hover:bg-gray-800 transition-colors">닫기</button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1">현재 비밀번호</label>
+                  <input
+                    type="password"
+                    value={pwCurrent}
+                    onChange={(e) => { setPwCurrent(e.target.value); setPwError(''); }}
+                    placeholder="현재 비밀번호 입력"
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition-all"
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1">새 비밀번호</label>
+                  <input
+                    type="password"
+                    value={pwNew}
+                    onChange={(e) => { setPwNew(e.target.value); setPwError(''); }}
+                    placeholder="새 비밀번호 입력"
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1">새 비밀번호 확인</label>
+                  <input
+                    type="password"
+                    value={pwConfirm}
+                    onChange={(e) => { setPwConfirm(e.target.value); setPwError(''); }}
+                    placeholder="새 비밀번호 다시 입력"
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition-all"
+                  />
+                </div>
+                {pwError && (
+                  <p className="text-red-500 text-sm font-bold bg-red-50 p-3 rounded-xl text-center">{pwError}</p>
+                )}
+                <div className="flex gap-3 pt-2">
+                  <button onClick={() => setShowPasswordModal(false)} className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-xl font-bold hover:bg-gray-200 transition-colors">취소</button>
+                  <button
+                    onClick={async () => {
+                      const currentPw = currentUser.password || '1234';
+                      if (!pwCurrent) { setPwError('현재 비밀번호를 입력해주세요.'); return; }
+                      if (pwCurrent !== currentPw) { setPwError('현재 비밀번호가 틀렸습니다.'); return; }
+                      if (!pwNew) { setPwError('새 비밀번호를 입력해주세요.'); return; }
+                      if (pwNew.length < 4) { setPwError('비밀번호는 4자 이상이어야 합니다.'); return; }
+                      if (pwNew !== pwConfirm) { setPwError('새 비밀번호가 일치하지 않습니다.'); return; }
+                      await updatePassword(currentUser.id, pwNew);
+                      setPwSuccess(true);
+                    }}
+                    className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-colors"
+                  >
+                    변경하기
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Teacher Message Modal */}
       {showMessageModal && (

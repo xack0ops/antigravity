@@ -28,6 +28,8 @@ export const AppProvider = ({ children }) => {
   const [teacherMessages, setTeacherMessages] = useState([]);
   const [roles, setRoles] = useState([]);
   const [ministries, setMinistries] = useState([]);
+  const [scoreTransactions, setScoreTransactions] = useState([]);
+  const [scoreShop, setScoreShop] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
   const [currentTimetable, setCurrentTimetable] = useState({ periods: Array(6).fill('') });
   const [loading, setLoading] = useState(true);
@@ -122,6 +124,19 @@ export const AppProvider = ({ children }) => {
         }
     );
 
+    // Listen to Score Transactions
+    const unsubScoreTransactions = onSnapshot(
+        query(collection(db, 'score_transactions'), orderBy('timestamp', 'desc')),
+        (snapshot) => {
+            setScoreTransactions(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+        }
+    );
+
+    // Listen to Score Shop
+    const unsubScoreShop = onSnapshot(collection(db, 'score_shop'), (snapshot) => {
+        setScoreShop(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+
     // Daily and Weekly task reset
     const checkAndResetTasks = async () => {
         const now = new Date();
@@ -203,6 +218,8 @@ export const AppProvider = ({ children }) => {
       unsubWiki();
       unsubIncidents();
       unsubMessages();
+      unsubScoreTransactions();
+      unsubScoreShop();
     };
   }, []);
 
@@ -429,6 +446,48 @@ export const AppProvider = ({ children }) => {
       await deleteDoc(doc(db, 'teacher_messages', id));
   };
 
+  // Score System Actions
+  // isSpend: true = 점수 사용(현재점수만 감소), false = 부여/차감(현재+누적 모두 반영)
+  const addScoreTransaction = async ({ userId, amount, reason, isSpend, grantedBy, grantedByName }) => {
+      await addDoc(collection(db, 'score_transactions'), {
+          userId,
+          amount,       // positive = 부여, negative = 차감
+          reason,
+          isSpend: isSpend || false,
+          grantedBy,
+          grantedByName,
+          timestamp: new Date().toISOString(),
+      });
+  };
+
+  const deleteScoreTransaction = async (id) => {
+      await deleteDoc(doc(db, 'score_transactions', id));
+  };
+
+  // Score Shop CRUD
+  const addScoreShopItem = async (data) => {
+      await addDoc(collection(db, 'score_shop'), data);
+  };
+  const updateScoreShopItem = async (id, data) => {
+      await updateDoc(doc(db, 'score_shop', id), data);
+  };
+  const deleteScoreShopItem = async (id) => {
+      await deleteDoc(doc(db, 'score_shop', id));
+  };
+
+  // Helper: compute score summary for a user
+  const getUserScoreSummary = (userId) => {
+      const userTxns = scoreTransactions.filter(t => t.userId === userId);
+      // 현재 점수: 모든 거래 합
+      const currentScore = userTxns.reduce((sum, t) => sum + (t.amount || 0), 0);
+      // 누적 점수: isSpend=false 거래만 합산
+      const accumulatedScore = userTxns
+          .filter(t => !t.isSpend)
+          .reduce((sum, t) => sum + (t.amount || 0), 0);
+      const creditGrade = Math.max(0, Math.floor(accumulatedScore / 10));
+      return { currentScore, accumulatedScore, creditGrade };
+  };
+
   // Enhanced Real-time Timetable Listener
   const subscribeToTimetable = (dateStr, callback) => {
     const docRef = doc(db, 'timetables', dateStr);
@@ -476,6 +535,7 @@ export const AppProvider = ({ children }) => {
   return (
     <AppContext.Provider value={{
       users, roles, ministries, tasks, wikiEntries, incidents, teacherMessages,
+      scoreTransactions, scoreShop,
       currentUser,
       loading,
       login, logout,
@@ -487,6 +547,9 @@ export const AppProvider = ({ children }) => {
       addWikiEntry, updateWikiEntry, deleteWikiEntry,
       addIncident, updateIncident, deleteIncident,
       addTeacherMessage, deleteTeacherMessage,
+      addScoreTransaction, deleteScoreTransaction,
+      addScoreShopItem, updateScoreShopItem, deleteScoreShopItem,
+      getUserScoreSummary,
       currentTimetable, fetchTimetable, saveTimetable, fetchAllTimetables, subscribeToTimetable
     }}>
       {children}

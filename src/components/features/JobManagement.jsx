@@ -24,6 +24,7 @@ const JobManagement = () => {
   const [newTaskType, setNewTaskType] = useState('self'); // 'self' or 'admin'
   const [newTaskFreqType, setNewTaskFreqType] = useState('daily');
   const [newTaskFreqDays, setNewTaskFreqDays] = useState([]);
+  const [newTaskAction, setNewTaskAction] = useState(''); // '' | 'open_petition' | 'open_judicial' | 'open_wiki'
 
   const DAYS_OF_WEEK = [
     { value: 1, label: '월' },
@@ -117,18 +118,22 @@ const JobManagement = () => {
         return;
     }
     
-    await adminAddTask({
+    const taskData = {
       id: `t_${Date.now()}`,
       roleId: selectedRoleId,
       text: newTaskText.trim(),
-      type: newTaskType, // 'self' or 'admin'
+      type: newTaskType,
       frequency: {
           type: newTaskFreqType,
           days: newTaskFreqType === 'specific_days' ? newTaskFreqDays : []
       }
-    });
+    };
+    if (newTaskAction) taskData.action = newTaskAction;
+
+    await adminAddTask(taskData);
     setNewTaskText('');
     setNewTaskFreqDays([]);
+    setNewTaskAction('');
   };
 
   const selectedMinistry = ministries.find(m => m.id === selectedMinistryId);
@@ -392,6 +397,17 @@ const JobManagement = () => {
                                                             <option value="admin">선생님 검사</option>
                                                         </select>
                                                     </div>
+                                                    {/* 실행 링크 */}
+                                                    <select
+                                                        id={`task-action-${task.id}`}
+                                                        defaultValue={task.action || ''}
+                                                        className="w-full px-2 py-1.5 text-sm border rounded outline-none bg-white"
+                                                    >
+                                                        <option value="">실행 링크 없음</option>
+                                                        <option value="open_petition">🏛️ 국무회의 탭 열기</option>
+                                                        <option value="open_judicial">⚖️ 재판소 탭 열기</option>
+                                                        <option value="open_wiki">🔍 물어보살 탭 열기</option>
+                                                    </select>
 
                                                     <div 
                                                         id={`task-freq-days-container-${task.id}`}
@@ -439,15 +455,18 @@ const JobManagement = () => {
                                                                         return;
                                                                     }
                                                                 }
-
-                                                                updateTask(task.id, {
+                                                                const actionVal = document.getElementById(`task-action-${task.id}`)?.value || '';
+                                                                const updateData = {
                                                                     text: document.getElementById(`task-text-${task.id}`).value,
                                                                     type: document.getElementById(`task-type-${task.id}`).value,
                                                                     frequency: {
                                                                         type: freqTypeVal,
                                                                         days: selectedDays
                                                                     }
-                                                                });
+                                                                };
+                                                                if (actionVal) updateData.action = actionVal;
+                                                                else updateData.action = null;
+                                                                updateTask(task.id, updateData);
                                                                 setEditingTask(null);
                                                             }}
                                                             className="px-3 py-1.5 bg-green-500 text-white rounded text-xs font-bold shrink-0"
@@ -474,6 +493,11 @@ const JobManagement = () => {
                                                         </span>
                                                     </div>
                                                     <p className="text-sm font-medium text-gray-800 break-keep leading-snug">{task.text}</p>
+                                                    {task.action && (
+                                                        <span className="inline-block mt-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">
+                                                            🔗 {task.action === 'open_petition' ? '국무회의' : task.action === 'open_judicial' ? '재판소' : task.action === 'open_wiki' ? '물어보살' : task.action}
+                                                        </span>
+                                                    )}
                                                 </div>
                                                 <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                                                     <button onClick={() => setEditingTask(task.id)} className="p-1.5 text-gray-400 hover:text-blue-500 rounded"><Edit2 className="w-3.5 h-3.5" /></button>
@@ -532,6 +556,18 @@ const JobManagement = () => {
                                             ))}
                                         </div>
                                     )}
+
+                                    {/* 실행 링크 */}
+                                    <select
+                                        value={newTaskAction}
+                                        onChange={(e) => setNewTaskAction(e.target.value)}
+                                        className="w-full px-2 py-1.5 text-sm border rounded outline-none bg-white font-medium text-gray-700"
+                                    >
+                                        <option value="">실행 링크 없음</option>
+                                        <option value="open_petition">🏛️ 국무회의 탭 열기</option>
+                                        <option value="open_judicial">⚖️ 재판소 탭 열기</option>
+                                        <option value="open_wiki">🔍 물어보살 탭 열기</option>
+                                    </select>
 
                                     <button 
                                         onClick={handleAddTask}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { LogOut, CheckCircle2, KeyRound, UserPlus, Trash2, ChevronDown, ChevronUp, BookOpen, Wrench, Calendar, X, Scale, BellRing, Sheet, Loader2, ExternalLink, Shield } from 'lucide-react';
+import { LogOut, CheckCircle2, KeyRound, UserPlus, Trash2, ChevronDown, ChevronUp, BookOpen, Wrench, Calendar, X, Scale, BellRing, Sheet, Loader2, ExternalLink, Shield, Star, Plus, Edit2 } from 'lucide-react';
 import { db } from '../firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { GOOGLE_CLIENT_ID, GOOGLE_SHEETS_SCOPE } from '../googleConfig';
@@ -10,9 +10,10 @@ import { getLocalDateString } from '../utils/dateUtils';
 import TimetableEditor from './TimetableEditor';
 import WikiManager from './WikiManager';
 import JobManagement from './features/JobManagement';
+import ScoreManager from './features/ScoreManager';
 
 const AdminDashboard = () => {
-  const { users, roles, tasks, ministries, assignStudentRoles, verifyTask, updatePassword, addUser, deleteUser, logout, fetchAllTimetables, saveTimetable, teacherMessages, deleteTeacherMessage, currentUser } = useAppContext();
+  const { users, roles, tasks, ministries, assignStudentRoles, verifyTask, updatePassword, addUser, deleteUser, logout, fetchAllTimetables, saveTimetable, teacherMessages, deleteTeacherMessage, currentUser, scoreTransactions, scoreShop, addScoreShopItem, updateScoreShopItem, deleteScoreShopItem, getUserScoreSummary } = useAppContext();
   const [activeTab, setActiveTab] = useState('management'); // 'management', 'curriculum', 'tools', 'judicial', 'messages'
   const [activeTool, setActiveTool] = useState(null); // 'timetable', etc.
   
@@ -553,6 +554,19 @@ const AdminDashboard = () => {
                                     <p className="text-gray-400 text-sm mt-1">부서/역할/할 일 설정</p>
                                 </div>
                             </button>
+
+                            <button 
+                                onClick={() => setActiveTool('score_shop')}
+                                className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md hover:border-amber-200 transition-all flex flex-col items-center gap-4 group"
+                            >
+                                <div className="w-16 h-16 bg-amber-50 rounded-full flex items-center justify-center group-hover:bg-amber-500 transition-colors">
+                                    <Star className="w-8 h-8 text-amber-500 group-hover:text-white transition-colors" />
+                                </div>
+                                <div className="text-center">
+                                    <h3 className="font-bold text-lg text-gray-800">점수 관리</h3>
+                                    <p className="text-gray-400 text-sm mt-1">사용처 · 전체 현황</p>
+                                </div>
+                            </button>
                         </div>
                     ) : (
                         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 animate-in fade-in zoom-in-95 duration-200">
@@ -578,6 +592,18 @@ const AdminDashboard = () => {
                              )}
                              {activeTool === 'job_management' && (
                                  <JobManagement />
+                             )}
+                             {activeTool === 'score_shop' && (
+                                 <ScoreShopAdmin
+                                     scoreShop={scoreShop}
+                                     scoreTransactions={scoreTransactions}
+                                     users={users.filter(u => u.type === 'student')}
+                                     addScoreShopItem={addScoreShopItem}
+                                     updateScoreShopItem={updateScoreShopItem}
+                                     deleteScoreShopItem={deleteScoreShopItem}
+                                     getUserScoreSummary={getUserScoreSummary}
+                                     ScoreManagerComponent={ScoreManager}
+                                 />
                              )}
                         </div>
                     )}
@@ -967,6 +993,160 @@ const MessagesInbox = ({ messages, onDelete }) => {
                         </div>
                     ))}
                 </div>
+            )}
+        </div>
+    );
+};
+// 관리자 전용: 점수 사용처 관리 + 전체 학생 점수 현황
+const ScoreShopAdmin = ({ scoreShop, scoreTransactions, users, addScoreShopItem, updateScoreShopItem, deleteScoreShopItem, getUserScoreSummary, ScoreManagerComponent }) => {
+    const [tab, setTab] = useState('shop'); // 'shop' | 'scores'
+    const [editingItem, setEditingItem] = useState(null); // null | { id?, name, cost, description }
+    const [form, setForm] = useState({ name: '', cost: '', description: '' });
+    const [saving, setSaving] = useState(false);
+
+    const openNew = () => { setEditingItem({ isNew: true }); setForm({ name: '', cost: '', description: '' }); };
+    const openEdit = (item) => { setEditingItem(item); setForm({ name: item.name, cost: String(item.cost), description: item.description || '' }); };
+
+    const handleSave = async () => {
+        const cost = parseInt(form.cost, 10);
+        if (!form.name.trim() || isNaN(cost) || cost <= 0) { alert('사용처 이름과 점수(양수)를 입력해주세요.'); return; }
+        setSaving(true);
+        try {
+            if (editingItem.isNew) {
+                await addScoreShopItem({ name: form.name.trim(), cost, description: form.description.trim() });
+            } else {
+                await updateScoreShopItem(editingItem.id, { name: form.name.trim(), cost, description: form.description.trim() });
+            }
+            setEditingItem(null);
+        } finally { setSaving(false); }
+    };
+
+    const handleDelete = async (item) => {
+        if (!window.confirm(`"${item.name}" 사용처를 삭제하시겠습니까?`)) return;
+        await deleteScoreShopItem(item.id);
+    };
+
+    const getCreditGradeLabel = (grade) => grade > 0 ? `등급 ${grade}` : '등급 없음';
+    const getCreditColor = (grade) => {
+        if (grade >= 10) return 'bg-yellow-100 text-yellow-700';
+        if (grade >= 7)  return 'bg-emerald-100 text-emerald-700';
+        if (grade >= 4)  return 'bg-blue-100 text-blue-700';
+        if (grade >= 1)  return 'bg-gray-100 text-gray-600';
+        return 'bg-gray-50 text-gray-400';
+    };
+
+    return (
+        <div className="space-y-6">
+            {/* 탭 */}
+            <div className="flex gap-2 border-b border-gray-100 pb-1">
+                {[['shop', '차 사용처 관리'], ['scores', '학생 점수 현황'], ['grant', '점수 부여 관리']].map(([id, label]) => (
+                    <button key={id} onClick={() => setTab(id)}
+                        className={`px-4 py-2 rounded-lg font-bold text-sm transition-colors ${tab === id ? 'bg-amber-100 text-amber-700' : 'text-gray-400 hover:text-gray-600'}`}
+                    >{label}</button>
+                ))}
+            </div>
+
+            {/* 사용처 관리 탭 */}
+            {tab === 'shop' && (
+                <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                        <h3 className="font-bold text-gray-700">점수 사용처 목록</h3>
+                        <button onClick={openNew} className="flex items-center gap-1 bg-amber-500 text-white px-3 py-2 rounded-xl text-sm font-bold hover:bg-amber-600 transition-colors">
+                            <Plus className="w-4 h-4" /> 사용처 추가
+                        </button>
+                    </div>
+
+                    {scoreShop.length === 0 ? (
+                        <div className="text-center py-12 text-gray-400 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                            <Star className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                            <p>등록된 사용처가 없습니다.</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-2">
+                            {scoreShop.map(item => (
+                                <div key={item.id} className="flex items-center gap-3 bg-gray-50 rounded-xl px-4 py-3 border border-gray-100">
+                                    <div className="flex-1">
+                                        <span className="font-bold text-gray-800">{item.name}</span>
+                                        {item.description && <span className="text-sm text-gray-500 ml-2">{item.description}</span>}
+                                    </div>
+                                    <span className="font-bold text-amber-600">{item.cost}점</span>
+                                    <button onClick={() => openEdit(item)} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">
+                                        <Edit2 className="w-4 h-4" />
+                                    </button>
+                                    <button onClick={() => handleDelete(item)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* 추가/수정 폼 */}
+                    {editingItem && (
+                        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 space-y-3">
+                            <h4 className="font-bold text-amber-800">{editingItem.isNew ? '새 사용처 추가' : '사용처 수정'}</h4>
+                            <input value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))}
+                                placeholder="사용처 이름 (ex: 자유시간 5분)"
+                                className="w-full px-3 py-2 rounded-xl border border-amber-200 outline-none focus:ring-2 focus:ring-amber-400 text-sm" />
+                            <input type="number" value={form.cost} onChange={e => setForm(f => ({...f, cost: e.target.value}))}
+                                placeholder="필요 점수"
+                                className="w-full px-3 py-2 rounded-xl border border-amber-200 outline-none focus:ring-2 focus:ring-amber-400 text-sm" />
+                            <input value={form.description} onChange={e => setForm(f => ({...f, description: e.target.value}))}
+                                placeholder="설명 (선택)"
+                                className="w-full px-3 py-2 rounded-xl border border-amber-200 outline-none focus:ring-2 focus:ring-amber-400 text-sm" />
+                            <div className="flex gap-2">
+                                <button onClick={() => setEditingItem(null)} className="flex-1 py-2 bg-white border border-gray-200 text-gray-600 rounded-xl font-bold text-sm">취소</button>
+                                <button onClick={handleSave} disabled={saving} className="flex-1 py-2 bg-amber-500 text-white rounded-xl font-bold text-sm hover:bg-amber-600 disabled:opacity-50">
+                                    {saving ? '저장 중...' : '저장'}
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* 학생 점수 현황 탭 */}
+            {tab === 'scores' && (
+                <div>
+                    <h3 className="font-bold text-gray-700 mb-4">전체 학생 점수 현황</h3>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm border-separate border-spacing-y-1">
+                            <thead>
+                                <tr className="text-xs text-gray-400 font-bold uppercase">
+                                    <th className="text-left px-4 py-2">학생</th>
+                                    <th className="text-right px-4 py-2">현재 점수</th>
+                                    <th className="text-right px-4 py-2">누적 점수</th>
+                                    <th className="text-center px-4 py-2">신용등급</th>
+                                    <th className="text-right px-4 py-2">거래 횟수</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {users.map(student => {
+                                    const { currentScore, accumulatedScore, creditGrade } = getUserScoreSummary(student.id);
+                                    const txnCount = scoreTransactions.filter(t => t.userId === student.id).length;
+                                    return (
+                                        <tr key={student.id} className="bg-white rounded-xl hover:bg-gray-50 transition-colors">
+                                            <td className="px-4 py-3 font-bold text-gray-800 rounded-l-xl">{student.name}</td>
+                                            <td className={`px-4 py-3 text-right font-bold ${currentScore < 0 ? 'text-red-500' : 'text-indigo-600'}`}>{currentScore}점</td>
+                                            <td className="px-4 py-3 text-right font-bold text-emerald-600">{accumulatedScore}점</td>
+                                            <td className="px-4 py-3 text-center">
+                                                <span className={`text-xs font-bold px-2 py-1 rounded-full ${getCreditColor(creditGrade)}`}>
+                                                    {getCreditGradeLabel(creditGrade)}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-3 text-right text-gray-400 rounded-r-xl">{txnCount}건</td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+
+            {/* 점수 부여 관리 탭 */}
+            {tab === 'grant' && (
+                <ScoreManagerComponent />
             )}
         </div>
     );
