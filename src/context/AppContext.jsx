@@ -262,6 +262,17 @@ export const AppProvider = ({ children }) => {
     await batch.commit();
   };
 
+  const syncRoles = async (rolesToSync) => {
+    const batch = writeBatch(db);
+    rolesToSync.forEach(role => {
+      const ref = doc(db, 'roles', role.id);
+      // merge:true로 status 등 다른 필드는 유지하고 duties/description만 덮어씌움
+      batch.set(ref, { duties: role.duties || [], description: role.description || '', name: role.name }, { merge: true });
+    });
+    await batch.commit();
+    console.log('Role duties/descriptions synced.');
+  };
+
   const seedWiki = async (itemsToSeed) => {
       const batch = writeBatch(db);
       itemsToSeed.forEach(item => {
@@ -550,6 +561,7 @@ export const AppProvider = ({ children }) => {
       addScoreTransaction, deleteScoreTransaction,
       addScoreShopItem, updateScoreShopItem, deleteScoreShopItem,
       getUserScoreSummary,
+      syncRoles,
       currentTimetable, fetchTimetable, saveTimetable, fetchAllTimetables, subscribeToTimetable
     }}>
       {children}

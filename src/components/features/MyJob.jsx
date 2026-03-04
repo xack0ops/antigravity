@@ -103,8 +103,37 @@ const MyJob = ({ onNavigate }) => {
                 </div>
                 <div className="space-y-3">
                     {myTasks.length === 0 ? (
-                        <div className="p-8 text-center bg-white rounded-xl border border-dashed border-gray-200 text-gray-400">
-                            <p>부여된 업무가 없습니다. 자유시간!</p>
+                        <div className="space-y-4">
+                          {/* 오늘 할 일 없음 안내 */}
+                          <div className="px-5 py-4 bg-white rounded-2xl border border-dashed border-gray-200 text-center text-gray-400 text-sm">
+                            오늘 배정된 할 일이 없습니다 🎉 — 아래 업무 매뉴얼을 확인해 두세요!
+                          </div>
+                          {/* 역할별 업무 매뉴얼 */}
+                          {myRoles.map(role => {
+                            const duties = role.duties || [];
+                            return (
+                              <div key={role.id} className={`rounded-2xl border p-5 bg-white shadow-sm ${roleColor}`}>
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="text-[11px] font-bold uppercase tracking-wider opacity-60">{myMinistry?.name}</span>
+                                </div>
+                                <h4 className="text-lg font-black text-gray-800 mb-1">{role.name}</h4>
+                                <p className="text-sm text-gray-500 mb-3 leading-relaxed">{role.description}</p>
+                                {duties.length > 0 && (
+                                  <div className="bg-white/70 rounded-xl p-3 space-y-1.5">
+                                    <p className="text-[11px] font-bold text-gray-400 uppercase mb-2">📋 업무 가이드</p>
+                                    {duties.map((duty, i) => (
+                                      <div key={i} className={`flex gap-2 items-start text-[13px] leading-snug ${
+                                        duty.startsWith('【체크】') ? 'text-emerald-700 font-bold' : 'text-gray-700'
+                                      }`}>
+                                        <span className="shrink-0 mt-0.5">{duty.startsWith('【체크】') ? '✅' : '•'}</span>
+                                        <span>{duty}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                     ) : (
                         myTasks.map(task => (

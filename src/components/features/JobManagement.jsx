@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../../context/AppContext';
-import { Plus, Edit2, Trash2, Building, Shield, ClipboardList, Info } from 'lucide-react';
+import { Plus, Edit2, Trash2, Building, Shield, ClipboardList, Info, ChevronDown, ChevronUp, BookOpen } from 'lucide-react';
 
 const JobManagement = () => {
   const { 
     ministries, roles, tasks, 
     addMinistry, updateMinistry, deleteMinistry, 
     addRole, updateRole, deleteRole, 
-    adminAddTask, updateTask, deleteTask 
+    adminAddTask, updateTask, deleteTask,
+    syncRoles
   } = useAppContext();
 
   const [selectedMinistryId, setSelectedMinistryId] = useState(null);
@@ -17,6 +18,10 @@ const JobManagement = () => {
   const [editingMinistry, setEditingMinistry] = useState(null);
   const [editingRole, setEditingRole] = useState(null);
   const [editingTask, setEditingTask] = useState(null);
+  // role id -> duties 로컬 편집 배열
+  const [editingDuties, setEditingDuties] = useState([]);
+  // 펼쳐진 역할 duties 목록
+  const [expandedRoles, setExpandedRoles] = useState({});
 
   const [newMinistryName, setNewMinistryName] = useState('');
   const [newRoleName, setNewRoleName] = useState('');
@@ -95,7 +100,7 @@ const JobManagement = () => {
   };
 
   const handleUpdateRole = async (id, name, description) => {
-    await updateRole(id, { name, description });
+    await updateRole(id, { name, description, duties: editingDuties });
     setEditingRole(null);
   };
 
@@ -144,11 +149,26 @@ const JobManagement = () => {
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 w-full overflow-hidden">
         {/* Header */}
         <div className="bg-gray-50 border-b border-gray-100 p-6">
-            <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                <Shield className="w-6 h-6 text-indigo-500" />
-                업무 관리 (부서/역할 편성)
-            </h2>
-            <p className="text-gray-500 text-sm mt-1">학급의 부서를 만들고, 역할을 배정하며 각 역할의 데일리 임무를 설정합니다.</p>
+            <div className="flex justify-between items-start gap-4">
+              <div>
+                <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                    <Shield className="w-6 h-6 text-indigo-500" />
+                    업무 관리 (부서/역할 편성)
+                </h2>
+                <p className="text-gray-500 text-sm mt-1">학급의 부서를 만들고, 역할을 배정하며 각 역할의 데일리 임무를 설정합니다.</p>
+              </div>
+              <button
+                onClick={async () => {
+                  if (!window.confirm('모든 역할의 업무 매뉴얼을 초기 내용으로 복원하시겠습니까?\n(관리자가 수정한 내용이 덮어씌워집니다)')) return;
+                  await syncRoles();
+                  alert('✅ 기본 매뉴얼로 복원되었습니다!');
+                }}
+                className="shrink-0 flex items-center gap-1.5 px-3 py-2 text-xs font-bold bg-white border border-gray-200 hover:border-indigo-300 text-gray-500 hover:text-indigo-600 rounded-xl transition-colors shadow-sm"
+                title="코드에 저장된 기본 업무 매뉴얼로 되돌립니다"
+              >
+                <Info className="w-3.5 h-3.5" /> 기본 매뉴얼 복원
+              </button>
+            </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-gray-100 min-h-[600px]">
@@ -277,6 +297,37 @@ const JobManagement = () => {
                                                 defaultValue={role.description}
                                                 className="w-full px-2 py-1.5 text-xs text-gray-600 border rounded outline-none min-h-[60px]"
                                             />
+                                            {/* duties 편집 */}
+                                            <div className="border border-gray-200 rounded-lg p-2 bg-gray-50 space-y-1">
+                                              <div className="flex items-center justify-between mb-1">
+                                                <span className="text-[10px] font-bold text-gray-500 uppercase">업무 항목</span>
+                                                <button
+                                                  onClick={() => setEditingDuties(prev => [...prev, ''])}
+                                                  className="flex items-center gap-0.5 text-[10px] font-bold text-indigo-600 hover:text-indigo-800"
+                                                ><Plus style={{width:10,height:10}}/> 항목 추가</button>
+                                              </div>
+                                              {editingDuties.map((duty, idx) => (
+                                                <div key={idx} className="flex gap-1 items-center">
+                                                  <input
+                                                    value={duty}
+                                                    onChange={e => {
+                                                      const next = [...editingDuties];
+                                                      next[idx] = e.target.value;
+                                                      setEditingDuties(next);
+                                                    }}
+                                                    className="flex-1 px-2 py-1 text-xs border rounded outline-none bg-white"
+                                                    placeholder={`항목 ${idx + 1}`}
+                                                  />
+                                                  <button
+                                                    onClick={() => setEditingDuties(editingDuties.filter((_, i) => i !== idx))}
+                                                    className="text-red-400 hover:text-red-600 p-0.5"
+                                                  ><Trash2 style={{width:12,height:12}}/></button>
+                                                </div>
+                                              ))}
+                                              {editingDuties.length === 0 && (
+                                                <p className="text-[10px] text-gray-400 text-center py-1">항목이 없습니다. 위 버튼으로 추가하세요.</p>
+                                              )}
+                                            </div>
                                             <div className="flex gap-1 justify-end pt-1">
                                                 <button 
                                                     onClick={() => handleUpdateRole(
@@ -294,7 +345,7 @@ const JobManagement = () => {
                                             <div className="flex justify-between items-start mb-2">
                                                 <h4 className="font-bold text-gray-800 text-lg">{role.name}</h4>
                                                 <div className="flex items-center gap-1">
-                                                    <button onClick={(e) => { e.stopPropagation(); setEditingRole(role.id); }} className="p-1.5 text-gray-400 hover:text-blue-500 rounded-md hover:bg-blue-50">
+                                                    <button onClick={(e) => { e.stopPropagation(); setEditingRole(role.id); setEditingDuties(role.duties || []); }} className="p-1.5 text-gray-400 hover:text-blue-500 rounded-md hover:bg-blue-50">
                                                         <Edit2 className="w-3.5 h-3.5" />
                                                     </button>
                                                     <button onClick={(e) => { e.stopPropagation(); handleDeleteRole(role.id); }} className="p-1.5 text-gray-400 hover:text-red-500 rounded-md hover:bg-red-50">
@@ -302,10 +353,34 @@ const JobManagement = () => {
                                                     </button>
                                                 </div>
                                             </div>
-                                            <p className="text-xs text-gray-500 leading-relaxed mb-3">{role.description}</p>
-                                            <div className="text-[10px] font-bold text-indigo-500 bg-indigo-50 inline-block px-2 py-1 rounded">
+                                            <p className="text-xs text-gray-500 leading-relaxed mb-2">{role.description}</p>
+                                            <div className="flex items-center justify-between mb-1">
+                                              <div className="text-[10px] font-bold text-indigo-500 bg-indigo-50 inline-block px-2 py-1 rounded">
                                                 할 일 {tasks.filter(t => t.roleId === role.id).length}개
+                                              </div>
+                                              {(role.duties || []).length > 0 && (
+                                                <button
+                                                  onClick={e => { e.stopPropagation(); setExpandedRoles(prev => ({...prev, [role.id]: !prev[role.id]})); }}
+                                                  className="flex items-center gap-0.5 text-[10px] font-bold text-gray-400 hover:text-indigo-600 transition-colors"
+                                                >
+                                                  <BookOpen style={{width:11,height:11}}/>
+                                                  업무 {expandedRoles[role.id] ? '접기' : `${(role.duties||[]).length}개 보기`}
+                                                  {expandedRoles[role.id] ? <ChevronUp style={{width:11,height:11}}/> : <ChevronDown style={{width:11,height:11}}/>}
+                                                </button>
+                                              )}
                                             </div>
+                                            {expandedRoles[role.id] && (
+                                              <div className="mt-1 border border-indigo-100 rounded-lg bg-indigo-50/50 p-2 space-y-1" onClick={e => e.stopPropagation()}>
+                                                {(role.duties || []).map((duty, idx) => (
+                                                  <div key={idx} className={`flex gap-1.5 items-start text-[11px] leading-snug ${
+                                                    duty.startsWith('【체크】') ? 'text-emerald-700 font-bold' : 'text-gray-700'
+                                                  }`}>
+                                                    <span className="shrink-0 mt-0.5">{duty.startsWith('【체크】') ? '✅' : '•'}</span>
+                                                    <span>{duty}</span>
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            )}
                                         </>
                                     )}
                                 </div>

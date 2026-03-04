@@ -11,6 +11,7 @@ import TimetableEditor from './TimetableEditor';
 import WikiManager from './WikiManager';
 import JobManagement from './features/JobManagement';
 import ScoreManager from './features/ScoreManager';
+import LifeNoteManager from './features/LifeNoteManager';
 
 const AdminDashboard = () => {
   const { users, roles, tasks, ministries, assignStudentRoles, verifyTask, updatePassword, addUser, deleteUser, logout, fetchAllTimetables, saveTimetable, teacherMessages, deleteTeacherMessage, currentUser, scoreTransactions, scoreShop, addScoreShopItem, updateScoreShopItem, deleteScoreShopItem, getUserScoreSummary } = useAppContext();
@@ -567,6 +568,19 @@ const AdminDashboard = () => {
                                     <p className="text-gray-400 text-sm mt-1">사용처 · 전체 현황</p>
                                 </div>
                             </button>
+
+                            <button 
+                                onClick={() => setActiveTool('life_note')}
+                                className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md hover:border-indigo-200 transition-all flex flex-col items-center gap-4 group"
+                            >
+                                <div className="w-16 h-16 bg-indigo-50 rounded-full flex items-center justify-center group-hover:bg-indigo-600 transition-colors">
+                                    <BookOpen className="w-8 h-8 text-indigo-600 group-hover:text-white transition-colors" />
+                                </div>
+                                <div className="text-center">
+                                    <h3 className="font-bold text-lg text-gray-800">인생노트 점검</h3>
+                                    <p className="text-gray-400 text-sm mt-1">교육부 권한</p>
+                                </div>
+                            </button>
                         </div>
                     ) : (
                         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 animate-in fade-in zoom-in-95 duration-200">
@@ -575,6 +589,7 @@ const AdminDashboard = () => {
                                      {activeTool === 'timetable_editor' && <><Calendar className="w-6 h-6 text-indigo-600"/> 시간표 관리자</>}
                                      {activeTool === 'wiki_manager' && <><BookOpen className="w-6 h-6 text-indigo-600"/> 물어보살 관리자</>}
                                      {activeTool === 'job_management' && <><Shield className="w-6 h-6 text-indigo-600"/> 업무 관리 (조직도 구성)</>}
+                                 {activeTool === 'life_note' && <><BookOpen className="w-6 h-6 text-indigo-600"/> 인생노트 점검</>}
                                 </h3>
                                 <button 
                                     onClick={() => setActiveTool(null)}
@@ -592,6 +607,9 @@ const AdminDashboard = () => {
                              )}
                              {activeTool === 'job_management' && (
                                  <JobManagement />
+                             )}
+                             {activeTool === 'life_note' && (
+                                 <LifeNoteManager />
                              )}
                              {activeTool === 'score_shop' && (
                                  <ScoreShopAdmin
