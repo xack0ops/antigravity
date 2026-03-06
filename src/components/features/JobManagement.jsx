@@ -17,6 +17,8 @@ const JobManagement = () => {
   // Editing states
   const [editingMinistry, setEditingMinistry] = useState(null);
   const [editingRole, setEditingRole] = useState(null);
+  const [editingRoleName, setEditingRoleName] = useState('');
+  const [editingRoleDesc, setEditingRoleDesc] = useState('');
   const [editingTask, setEditingTask] = useState(null);
   // role id -> duties 로컬 편집 배열
   const [editingDuties, setEditingDuties] = useState([]);
@@ -89,18 +91,25 @@ const JobManagement = () => {
 
   const handleAddRole = async () => {
     if (!newRoleName.trim() || !selectedMinistryId) return;
+    const newId = `r_${Date.now()}`;
     await addRole({
-      id: `r_${Date.now()}`,
+      id: newId,
       ministryId: selectedMinistryId,
       name: newRoleName.trim(),
       description: '설명을 입력해주세요.',
       duties: []
     });
     setNewRoleName('');
+    // 새로 추가한 역할을 자동 선택
+    setSelectedRoleId(newId);
   };
 
-  const handleUpdateRole = async (id, name, description) => {
-    await updateRole(id, { name, description, duties: editingDuties });
+  const handleUpdateRole = async (id) => {
+    if (!editingRoleName.trim()) {
+      alert('역할 이름을 입력해주세요.');
+      return;
+    }
+    await updateRole(id, { name: editingRoleName.trim(), description: editingRoleDesc, duties: editingDuties });
     setEditingRole(null);
   };
 
@@ -288,14 +297,16 @@ const JobManagement = () => {
                                         <div className="space-y-2" onClick={e => e.stopPropagation()}>
                                             <input 
                                                 type="text" 
-                                                id={`role-name-${role.id}`}
-                                                defaultValue={role.name}
+                                                value={editingRoleName}
+                                                onChange={e => setEditingRoleName(e.target.value)}
                                                 className="w-full px-2 py-1.5 text-sm font-bold border rounded outline-none"
+                                                placeholder="역할 이름"
                                             />
                                             <textarea 
-                                                id={`role-desc-${role.id}`}
-                                                defaultValue={role.description}
+                                                value={editingRoleDesc}
+                                                onChange={e => setEditingRoleDesc(e.target.value)}
                                                 className="w-full px-2 py-1.5 text-xs text-gray-600 border rounded outline-none min-h-[60px]"
+                                                placeholder="역할 설명"
                                             />
                                             {/* duties 편집 */}
                                             <div className="border border-gray-200 rounded-lg p-2 bg-gray-50 space-y-1">
@@ -330,11 +341,7 @@ const JobManagement = () => {
                                             </div>
                                             <div className="flex gap-1 justify-end pt-1">
                                                 <button 
-                                                    onClick={() => handleUpdateRole(
-                                                        role.id,
-                                                        document.getElementById(`role-name-${role.id}`).value,
-                                                        document.getElementById(`role-desc-${role.id}`).value
-                                                    )}
+                                                    onClick={() => handleUpdateRole(role.id)}
                                                     className="px-3 py-1 bg-green-500 text-white rounded text-xs font-bold"
                                                 >저장</button>
                                                 <button onClick={() => setEditingRole(null)} className="px-3 py-1 bg-gray-200 rounded text-xs">취소</button>
@@ -345,7 +352,7 @@ const JobManagement = () => {
                                             <div className="flex justify-between items-start mb-2">
                                                 <h4 className="font-bold text-gray-800 text-lg">{role.name}</h4>
                                                 <div className="flex items-center gap-1">
-                                                    <button onClick={(e) => { e.stopPropagation(); setEditingRole(role.id); setEditingDuties(role.duties || []); }} className="p-1.5 text-gray-400 hover:text-blue-500 rounded-md hover:bg-blue-50">
+                                                    <button onClick={(e) => { e.stopPropagation(); setSelectedRoleId(role.id); setEditingRole(role.id); setEditingRoleName(role.name); setEditingRoleDesc(role.description || ''); setEditingDuties(role.duties || []); }} className="p-1.5 text-gray-400 hover:text-blue-500 rounded-md hover:bg-blue-50">
                                                         <Edit2 className="w-3.5 h-3.5" />
                                                     </button>
                                                     <button onClick={(e) => { e.stopPropagation(); handleDeleteRole(role.id); }} className="p-1.5 text-gray-400 hover:text-red-500 rounded-md hover:bg-red-50">
@@ -646,7 +653,9 @@ const JobManagement = () => {
 
                                     <button 
                                         onClick={handleAddTask}
-                                        className="w-full mt-1 px-3 py-2 bg-gray-800 hover:bg-gray-900 text-white font-bold rounded text-sm transition-colors"
+                                        disabled={!newTaskText.trim() || !selectedRoleId}
+                                        className="w-full mt-1 px-3 py-2 bg-gray-800 hover:bg-gray-900 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold rounded text-sm transition-colors"
+                                        title={!newTaskText.trim() ? '할 일 내용을 입력해주세요' : !selectedRoleId ? '역할을 먼저 선택해주세요' : ''}
                                     >저장하기</button>
                                 </div>
                             </div>

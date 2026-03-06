@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../../context/AppContext';
+import { db } from '../../firebase';
+import {
+  doc, setDoc, onSnapshot, collection, getDocs
+} from 'firebase/firestore';
 import {
   CheckCircle2, XCircle, MinusCircle, Copy, Trash2,
   BarChart2, X, Coins, User,
@@ -33,10 +37,12 @@ const LifeNoteManager = () => {
   const students = users.filter(u => u.type === 'student').sort((a, b) => a.name.localeCompare(b.name));
 
   const [selectedDate, setSelectedDate] = useState(toDateStr());
-  const [records, setRecords] = useState({});
-  const [fineHistory, setFineHistory] = useState({});
-  // dateStr -> Set of userId strings that already received score
-  const [scoreGranted, setScoreGranted] = useState({});
+
+  // Firestore 실시간 데이터
+  const [records, setRecords] = useState({});       // { dateStr: { studentId: status } }
+  const [fineHistory, setFineHistory] = useState({}); // { studentId: [{ date, amount, period }] }
+  const [scoreGranted, setScoreGranted] = useState({}); // { dateStr: Set<userId> }
+
   const [lastSaved, setLastSaved] = useState(null);
   const [grantingScore, setGrantingScore] = useState(false);
 
@@ -51,68 +57,76 @@ const LifeNoteManager = () => {
 
   const [toast, setToast] = useState('');
 
-  // localStorage 로드
+  // ── Firestore 실시간 구독 ────────────────────────────────
   useEffect(() => {
-    try {
-      const r = localStorage.getItem('lifeNoteRecords');
-      const f = localStorage.getItem('lifeNoteFines');
-      const g = localStorage.getItem('lifeNoteScoreGranted');
-      if (r) setRecords(JSON.parse(r));
-      if (f) setFineHistory(JSON.parse(f));
-      if (g) {
-        // JSON으로 저장 시 Set은 배열로 직렬화
-        const parsed = JSON.parse(g);
-        const converted = {};
-        Object.keys(parsed).forEach(date => { converted[date] = new Set(parsed[date]); });
-        setScoreGranted(converted);
-      }
-    } catch (e) { console.error(e); }
-  }, []);
+    // 출결 기록 구독 (lifeNoteRecords 컬렉션)
+    const unsubRecords = onSnapshot(collection(db, 'lifeNoteRecords'), (snapshot) => {
+      const newRecords = {};
+      snapshot.docs.forEach(d => { newRecords[d.id] = d.data(); });
+      setRecords(newRecords);
+    });
 
-  // localStorage 저장
-  useEffect(() => {
-    try {
-      localStorage.setItem('lifeNoteRecords', JSON.stringify(records));
-      localStorage.setItem('lifeNoteFines', JSON.stringify(fineHistory));
-      // Set -> 배열로 직렬화
-      const serialized = {};
-      Object.keys(scoreGranted).forEach(date => { serialized[date] = [...scoreGranted[date]]; });
-      localStorage.setItem('lifeNoteScoreGranted', JSON.stringify(serialized));
-      setLastSaved(new Date().toLocaleTimeString('ko-KR'));
-    } catch (e) { console.error(e); }
-  }, [records, fineHistory, scoreGranted]);
+    // 벌금 구독 (lifeNoteFines 컬렉션)
+    const unsubFines = onSnapshot(collection(db, 'lifeNoteFines'), (snapshot) => {
+      const newFines = {};
+      snapshot.docs.forEach(d => { newFines[d.id] = d.data().history || []; });
+      setFineHistory(newFines);
+    });
+
+    // 점수 부여 기록 구독 (lifeNoteScoreGranted 컬렉션)
+    const unsubGranted = onSnapshot(collection(db, 'lifeNoteScoreGranted'), (snapshot) => {
+      const newGranted = {};
+      snapshot.docs.forEach(d => {
+        newGranted[d.id] = new Set(d.data().grantedIds || []);
+      });
+      setScoreGranted(newGranted);
+    });
+
+    return () => {
+      unsubRecords();
+      unsubFines();
+      unsubGranted();
+    };
+  }, []);
 
   const showToast = (msg) => {
     setToast(msg);
     setTimeout(() => setToast(''), 3000);
   };
 
-  // 상태 변경
-  const setStatus = (studentId, status) => {
-    setRecords(prev => ({
-      ...prev,
-      [selectedDate]: { ...(prev[selectedDate] || {}), [studentId]: status }
-    }));
+  // ── Firestore 쓰기 헬퍼 ──────────────────────────────────
+  const saveRecordForDate = async (dateStr, dayData) => {
+    await setDoc(doc(db, 'lifeNoteRecords', dateStr), dayData, { merge: true });
+    setLastSaved(new Date().toLocaleTimeString('ko-KR'));
   };
 
-  const setStatusForDate = (dateStr, studentId, status) => {
-    setRecords(prev => ({
-      ...prev,
-      [dateStr]: { ...(prev[dateStr] || {}), [studentId]: status }
-    }));
+  // 상태 변경
+  const setStatus = async (studentId, status) => {
+    const current = records[selectedDate] || {};
+    const updated = { ...current, [studentId]: status };
+    await saveRecordForDate(selectedDate, updated);
+  };
+
+  const setStatusForDate = async (dateStr, studentId, status) => {
+    const current = records[dateStr] || {};
+    const updated = { ...current, [studentId]: status };
+    await saveRecordForDate(dateStr, updated);
   };
 
   const getStatus = (studentId) => records[selectedDate]?.[studentId] || 'missing';
 
-  const setAllSubmitted = () => {
+  const setAllSubmitted = async () => {
     const newDay = {};
     students.forEach(s => { newDay[s.id] = 'submitted'; });
-    setRecords(prev => ({ ...prev, [selectedDate]: newDay }));
+    await setDoc(doc(db, 'lifeNoteRecords', selectedDate), newDay);
+    setLastSaved(new Date().toLocaleTimeString('ko-KR'));
   };
 
-  const clearDay = () => {
+  const clearDay = async () => {
     if (!window.confirm(`${selectedDate} 데이터를 초기화하시겠습니까?`)) return;
-    setRecords(prev => { const n = { ...prev }; delete n[selectedDate]; return n; });
+    await setDoc(doc(db, 'lifeNoteRecords', selectedDate), {});
+    setLastSaved(new Date().toLocaleTimeString('ko-KR'));
+    showToast('초기화 완료');
   };
 
   // 날짜 이동
@@ -152,12 +166,10 @@ const LifeNoteManager = () => {
           })
         )
       );
-      // 부여된 학생 기록
-      setScoreGranted(prev => {
-        const prevSet = new Set(prev[selectedDate] || []);
-        ungrantedSubmitters.forEach(s => prevSet.add(s.id));
-        return { ...prev, [selectedDate]: prevSet };
-      });
+      // Firestore에 점수 부여 기록 저장
+      const prevSet = scoreGranted[selectedDate] || new Set();
+      const newGrantedIds = [...prevSet, ...ungrantedSubmitters.map(s => s.id)];
+      await setDoc(doc(db, 'lifeNoteScoreGranted', selectedDate), { grantedIds: newGrantedIds });
       showToast(`⭐ ${ungrantedSubmitters.length}명에게 1점씩 부여 완료!`);
     } catch (e) {
       console.error(e);
@@ -195,8 +207,6 @@ const LifeNoteManager = () => {
     catch { showToast('⚠️ 복사 실패. 직접 드래그하여 복사하세요.'); }
     document.body.removeChild(el);
   };
-
-
 
   // 기간별 통계 계산
   const calcPeriodStats = () => {
@@ -237,18 +247,23 @@ const LifeNoteManager = () => {
     return history.reverse();
   };
 
-  // 벌금 납부
-  const payFine = (studentId, amount) => {
+  // 벌금 납부 (Firestore 저장)
+  const payFine = async (studentId, amount) => {
     const student = students.find(s => s.id === studentId);
     if (!window.confirm(`${student?.name} 학생의 벌금 ${amount}코인을 납부 처리하시겠습니까?`)) return;
     const entry = { date: toDateStr(), amount, period: `${startDate}~${endDate}` };
-    setFineHistory(prev => ({ ...prev, [studentId]: [...(prev[studentId] || []), entry] }));
+    const prev = fineHistory[studentId] || [];
+    const updated = [...prev, entry];
+    await setDoc(doc(db, 'lifeNoteFines', studentId), { history: updated });
     showToast('💰 납부 완료!');
   };
 
-  const deleteFine = (studentId, idx) => {
+  const deleteFine = async (studentId, idx) => {
     if (!window.confirm('납부 내역을 삭제하시겠습니까?')) return;
-    setFineHistory(prev => ({ ...prev, [studentId]: prev[studentId].filter((_, i) => i !== idx) }));
+    const prev = fineHistory[studentId] || [];
+    const updated = prev.filter((_, i) => i !== idx);
+    await setDoc(doc(db, 'lifeNoteFines', studentId), { history: updated });
+    showToast('삭제 완료');
   };
 
   const { submitted, missing, absent } = dailyStats();

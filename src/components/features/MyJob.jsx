@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../../context/AppContext';
-import { Info, Circle, CheckCircle2, Clock, X, BellRing, Send, Star } from 'lucide-react';
+import { Info, Circle, CheckCircle2, Clock, X, BellRing, Send, Star, BookOpen } from 'lucide-react';
 import ScoreManager from './ScoreManager';
+import LifeNoteManager from './LifeNoteManager';
 
 const MyJob = ({ onNavigate }) => {
     const { currentUser, tasks, roles, ministries, toggleTask, addTeacherMessage } = useAppContext();
@@ -22,7 +23,13 @@ const MyJob = ({ onNavigate }) => {
         myMinistry?.name === '행정안전부' ||
         myRoles.some(r => r.name === '대통령');
 
+    // 인생노트 점검 권한: 교육부원 or 관리자
+    const canManageLifeNote =
+        currentUser.type === 'admin' ||
+        currentUser.ministryId === 'm4';
+
     const [showScoreManager, setShowScoreManager] = useState(false);
+    const [showLifeNote, setShowLifeNote] = useState(false);
     
     const myTasks = tasks.filter(t => {
         if (!currentUser.roleIds?.includes(t.roleId)) return false;
@@ -53,7 +60,7 @@ const MyJob = ({ onNavigate }) => {
         }
     };
 
-    if (myRoles.length === 0) return (
+    if (myRoles.length === 0 && !canManageLifeNote) return (
         <div className="text-center py-12">
             <h2 className="text-xl font-bold text-gray-800">아직 역할이 없습니다.</h2>
             <p className="text-gray-500">선생님께 역할을 배정해달라고 말씀드리세요.</p>
@@ -172,7 +179,30 @@ const MyJob = ({ onNavigate }) => {
                 </div>
             )}
 
-            {/* Teacher Message Modal */}
+            {/* 인생노트 점검 카드 (교육부 전용) */}
+            {canManageLifeNote && (
+                <div className="bg-indigo-50 rounded-2xl border border-indigo-100 overflow-hidden">
+                    <button
+                        onClick={() => setShowLifeNote(v => !v)}
+                        className="w-full flex items-center gap-3 px-6 py-4 hover:bg-indigo-100 transition-colors"
+                    >
+                        <div className="w-10 h-10 bg-indigo-500 rounded-xl flex items-center justify-center shrink-0">
+                            <BookOpen className="w-5 h-5 text-white" />
+                        </div>
+                        <div className="flex-1 text-left">
+                            <p className="font-bold text-indigo-900">인생노트 점검</p>
+                            <p className="text-xs text-indigo-600">학생별 인생노트 제출 현황을 기록하세요</p>
+                        </div>
+                        <span className="text-indigo-400 font-bold text-lg">{showLifeNote ? '▲' : '▼'}</span>
+                    </button>
+                    {showLifeNote && (
+                        <div className="px-4 pb-5 pt-2">
+                            <LifeNoteManager />
+                        </div>
+                    )}
+                </div>
+            )}
+
             {showMessageModal && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-[60] animate-in fade-in duration-200">
                     <div className="bg-white rounded-3xl p-8 max-w-md w-full relative shadow-2xl">

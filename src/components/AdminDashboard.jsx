@@ -310,8 +310,16 @@ const AdminDashboard = () => {
                                         {student.name[0]}
                                     </div>
                                     <div>
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex items-center gap-2 flex-wrap">
                                             <h3 className="font-bold text-gray-800">{student.name}</h3>
+                                            {student.ministryId && (() => {
+                                                const ministry = ministries.find(m => m.id === student.ministryId);
+                                                return ministry ? (
+                                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${ministry.color}`}>
+                                                        {ministry.name}
+                                                    </span>
+                                                ) : null;
+                                            })()}
                                             <div className="text-xs font-bold text-gray-400 bg-gray-200 px-1.5 py-0.5 rounded">
                                                 {progress.done}/{progress.total}
                                             </div>

@@ -37,10 +37,17 @@ export const AppProvider = ({ children }) => {
   // 1. Initial Data Seeding & Real-time Listeners
   useEffect(() => {
     // Listen to Users
-    const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
+    const unsubUsers = onSnapshot(collection(db, 'users'), async (snapshot) => {
       if (snapshot.empty) {
-        // If DB is empty, upload initial data automatically
-        console.log("Database empty. Seeding initial data...");
+        // 안전 장치: settings/initialized 플래그가 있으면 절대 시드하지 않음
+        // (네트워크 오류나 타이밍 문제로 빈 snapshot이 와도 실데이터를 지우지 않기 위함)
+        const initRef = doc(db, 'settings', 'initialized');
+        const initSnap = await getDoc(initRef);
+        if (initSnap.exists()) {
+          console.warn("Users collection appears empty but DB is already initialized. Skipping seed.");
+          return;
+        }
+        console.log("Database empty and not initialized. Seeding initial data...");
         seedDatabase();
       } else {
         const usersList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -240,7 +247,13 @@ export const AppProvider = ({ children }) => {
     });
 
     await batch.commit();
-    console.log("Seeding complete!");
+
+    // 초기화 플래그 저장 — 이후 실수로 재시드 방지
+    await setDoc(doc(db, 'settings', 'initialized'), {
+      seededAt: new Date().toISOString(),
+      version: 1,
+    });
+    console.log("Seeding complete! Initialized flag saved.");
   };
 
   const seedMinistries = async () => {
