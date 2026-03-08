@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../../context/AppContext';
-import { Info, Circle, CheckCircle2, Clock, X, BellRing, Send, Star, BookOpen } from 'lucide-react';
+import { Info, Circle, CheckCircle2, Clock, X, BellRing, Send, Star, BookOpen, Wallet } from 'lucide-react';
 import ScoreManager from './ScoreManager';
 import LifeNoteManager from './LifeNoteManager';
+import AssignmentManager from './AssignmentManager';
+import FineRecordManager from './FineRecordManager';
+import BudgetManager from './BudgetManager';
 
 const MyJob = ({ onNavigate }) => {
     const { currentUser, tasks, roles, ministries, toggleTask, addTeacherMessage } = useAppContext();
@@ -28,8 +31,16 @@ const MyJob = ({ onNavigate }) => {
         currentUser.type === 'admin' ||
         currentUser.ministryId === 'm4';
 
+    // 벌금 기록 조회/관리 권한: 기획재정부원 or 관리자
+    const canViewFineRecords =
+        currentUser.type === 'admin' ||
+        myMinistry?.name === '기획재정부';
+
     const [showScoreManager, setShowScoreManager] = useState(false);
     const [showLifeNote, setShowLifeNote] = useState(false);
+    const [showAssignment, setShowAssignment] = useState(false);
+    const [showFineRecords, setShowFineRecords] = useState(false);
+    const [showBudgetManager, setShowBudgetManager] = useState(false);
     
     const myTasks = tasks.filter(t => {
         if (!currentUser.roleIds?.includes(t.roleId)) return false;
@@ -198,6 +209,78 @@ const MyJob = ({ onNavigate }) => {
                     {showLifeNote && (
                         <div className="px-4 pb-5 pt-2">
                             <LifeNoteManager />
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* 과제 점검 카드 (교육부 전용) */}
+            {canManageLifeNote && (
+                <div className="bg-sky-50 rounded-2xl border border-sky-100 overflow-hidden">
+                    <button
+                        onClick={() => setShowAssignment(v => !v)}
+                        className="w-full flex items-center gap-3 px-6 py-4 hover:bg-sky-100 transition-colors"
+                    >
+                        <div className="w-10 h-10 bg-sky-500 rounded-xl flex items-center justify-center shrink-0">
+                            <BookOpen className="w-5 h-5 text-white" />
+                        </div>
+                        <div className="flex-1 text-left">
+                            <p className="font-bold text-sky-900">과제/수행평가 점검</p>
+                            <p className="text-xs text-sky-600">학생별 과제 제출 현황을 기록하세요</p>
+                        </div>
+                        <span className="text-sky-400 font-bold text-lg">{showAssignment ? '▲' : '▼'}</span>
+                    </button>
+                    {showAssignment && (
+                        <div className="px-4 pb-5 pt-2">
+                            <AssignmentManager />
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* 벌금 기록지 관리 카드 (기획재정부 전용) */}
+            {canViewFineRecords && (
+                <div className="bg-yellow-50/50 rounded-2xl border border-yellow-200 overflow-hidden">
+                    <button
+                        onClick={() => setShowFineRecords(v => !v)}
+                        className="w-full flex items-center gap-3 px-6 py-4 hover:bg-yellow-100/50 transition-colors"
+                    >
+                        <div className="w-10 h-10 bg-yellow-600 rounded-xl flex items-center justify-center shrink-0">
+                            <BookOpen className="w-5 h-5 text-white" />
+                        </div>
+                        <div className="flex-1 text-left">
+                            <p className="font-bold text-yellow-900">벌금 기록지 관리</p>
+                            <p className="text-xs text-yellow-700 font-medium">판결에서 부과된 벌금과 납부 현황을 관리하세요</p>
+                        </div>
+                        <span className="text-yellow-500 font-bold text-lg">{showFineRecords ? '▲' : '▼'}</span>
+                    </button>
+                    {showFineRecords && (
+                        <div className="px-4 pb-5 pt-2">
+                            <FineRecordManager />
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* 학급 예산 관리 카드 (기획재정부 전용) */}
+            {canViewFineRecords && (
+                <div className="bg-emerald-50/50 rounded-2xl border border-emerald-200 overflow-hidden">
+                    <button
+                        onClick={() => setShowBudgetManager(v => !v)}
+                        className="w-full flex items-center gap-3 px-6 py-4 hover:bg-emerald-100/50 transition-colors"
+                    >
+                        <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center shrink-0">
+                            <Wallet className="w-5 h-5 text-white" />
+                        </div>
+                        <div className="flex-1 text-left">
+                            <p className="font-bold text-emerald-900">학급 예산 관리</p>
+                            <p className="text-xs text-emerald-700 font-medium">학급 비용 지출 내역을 기록하고 남은 예산을 확인하세요</p>
+                        </div>
+                        <span className="text-emerald-500 font-bold text-lg">{showBudgetManager ? '▲' : '▼'}</span>
+                    </button>
+                    {showBudgetManager && (
+                        <div className="px-4 pb-5 pt-2">
+                            <BudgetManager />
                         </div>
                     )}
                 </div>

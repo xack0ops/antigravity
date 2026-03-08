@@ -69,6 +69,59 @@ export const agreeToPetition = async (petitionId, userId) => {
     });
 };
 
+export const deletePetition = async (petitionId) => {
+    const petitionRef = doc(db, 'petitions', petitionId);
+    await deleteDoc(petitionRef);
+};
+
+// 1-A. Surveys
+export const addSurvey = async (title, description, options, author, ministryName) => {
+    const surveyOptions = options.map(opt => ({ text: opt, votes: 0 }));
+    await addDoc(collection(db, 'surveys'), {
+        title,
+        description,
+        options: surveyOptions,
+        author: author || '익명',
+        ministryName: ministryName || '부서 없음',
+        votedUsers: [], // Array of user IDs who have voted
+        totalVotes: 0,
+        createdAt: serverTimestamp()
+    });
+};
+
+export const voteSurvey = async (surveyId, userId, optionIndex) => {
+    const surveyRef = doc(db, 'surveys', surveyId);
+    // Since we need to update a nested array of objects (options) and increment a total count,
+    // we should use a transaction to be safe with concurrent votes.
+    const { runTransaction } = await import('firebase/firestore');
+    
+    await runTransaction(db, async (transaction) => {
+        const surveyDoc = await transaction.get(surveyRef);
+        if (!surveyDoc.exists()) {
+            throw "Survey does not exist!";
+        }
+        
+        const data = surveyDoc.data();
+        if (data.votedUsers?.includes(userId)) {
+            throw "User already voted!";
+        }
+        
+        const newOptions = [...data.options];
+        newOptions[optionIndex].votes += 1;
+        
+        transaction.update(surveyRef, {
+            options: newOptions,
+            votedUsers: [...(data.votedUsers || []), userId],
+            totalVotes: (data.totalVotes || 0) + 1
+        });
+    });
+};
+
+export const deleteSurvey = async (surveyId) => {
+    const surveyRef = doc(db, 'surveys', surveyId);
+    await deleteDoc(surveyRef);
+};
+
 // 2. Song Requests
 export const addSongRequest = async (title, singer, requester, story) => {
     await addDoc(collection(db, 'song_requests'), {

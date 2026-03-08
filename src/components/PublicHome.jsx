@@ -1,17 +1,24 @@
 import React, { useEffect, useState } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { Calendar, ClipboardList, Home, Gavel, ScrollText, Search, Briefcase, LogOut, KeyRound, X, Star, ShoppingBag } from 'lucide-react';
+import { Calendar, ClipboardList, Home, Gavel, ScrollText, Search, Briefcase, LogOut, KeyRound, X, Star, ShoppingBag, History, AlertCircle } from 'lucide-react';
 import { getLocalDateString } from '../utils/dateUtils';
-import PetitionBoard from './features/PetitionBoard';
+import { subscribeToCollection } from '../utils/firebaseUtils';
+import StateCouncil from './features/StateCouncil';
 import JudicialSystem from './features/JudicialSystem';
 import ClassWiki from './features/ClassWiki';
 import MyJob from './features/MyJob';
+import FleaMarket from './features/FleaMarket';
 
 const PublicHome = () => {
-  const { subscribeToTimetable, currentUser, logout, updatePassword, scoreShop, getUserScoreSummary, addScoreTransaction } = useAppContext();
+  const { subscribeToTimetable, currentUser, logout, updatePassword, scoreShop, getUserScoreSummary, addScoreTransaction, originalAdminId, stopImpersonating } = useAppContext();
   const [timetable, setTimetable] = useState({ periods: Array(6).fill('') });
   const [activeTab, setActiveTab] = useState('home');
+  const [subTab, setSubTab] = useState(null);
   const today = new Date().toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'long' });
+
+  // Notifications State
+  const [activeSurveys, setActiveSurveys] = useState([]);
+  const [activeAssignments, setActiveAssignments] = useState([]);
 
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [pwCurrent, setPwCurrent] = useState('');
@@ -29,6 +36,8 @@ const PublicHome = () => {
   const [showScoreShop, setShowScoreShop] = useState(false);
   const [spendingItem, setSpendingItem] = useState(null);
   const [spendSuccess, setSpendSuccess] = useState(false);
+
+  const [showScoreHistory, setShowScoreHistory] = useState(false);
 
   const scoreSummary = currentUser ? getUserScoreSummary(currentUser.id) : { currentScore: 0, accumulatedScore: 0, creditGrade: 0 };
 
@@ -71,9 +80,25 @@ const PublicHome = () => {
     return () => unsubscribe();
   }, []);
 
+  useEffect(() => {
+    let unsubSurveys = () => {};
+    let unsubAssignments = () => {};
+
+    if (activeTab === 'home' && currentUser) {
+      unsubSurveys = subscribeToCollection('surveys', setActiveSurveys);
+      unsubAssignments = subscribeToCollection('assignments', setActiveAssignments);
+    }
+    
+    return () => {
+        unsubSurveys();
+        unsubAssignments();
+    }
+  }, [activeTab, currentUser]);
+
   const navItems = [
     { id: 'home',     label: '홈',          icon: <Home     className="w-6 h-6"/> },
     { id: 'myjob',   label: '나의 업무',    icon: <Briefcase className="w-6 h-6"/> },
+    { id: 'market',  label: '반짝마켓',     icon: <ShoppingBag className="w-6 h-6"/> },
     { id: 'wiki',    label: '물어보살',     icon: <Search   className="w-6 h-6"/> },
     { id: 'petition',label: '국무회의',     icon: <ScrollText className="w-6 h-6"/> },
     { id: 'judicial',label: '재판소',       icon: <Gavel    className="w-6 h-6"/> },
@@ -91,7 +116,7 @@ const PublicHome = () => {
               className="flex items-center gap-2 cursor-pointer"
               onClick={() => setActiveTab('home')}
             >
-              <span className="text-xl font-black text-indigo-600">🏫 우리 반 나라</span>
+              <span className="text-xl font-black text-indigo-600">🏫 63랜드</span>
               <span className="text-xs font-bold bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full hidden sm:inline-block">
                 학생 포털
               </span>
@@ -99,8 +124,16 @@ const PublicHome = () => {
 
             {/* User Info */}
             {currentUser && (
-              <div className="flex items-center gap-3 bg-gray-50 px-4 py-2 rounded-full border border-gray-200">
-                <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-sm font-black text-indigo-600">
+              <div className="flex items-center gap-3 bg-gray-50 px-2 sm:px-4 py-2 rounded-full border border-gray-200 w-auto ml-auto">
+                {originalAdminId && (
+                  <button
+                    onClick={stopImpersonating}
+                    className="text-[11px] sm:text-xs font-bold bg-amber-100 text-amber-700 px-2 sm:px-3 py-1.5 rounded-full hover:bg-amber-200 transition-colors whitespace-nowrap"
+                  >
+                    <span className="hidden sm:inline">선생님 계정으로 </span>복귀
+                  </button>
+                )}
+                <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-sm font-black text-indigo-600 shrink-0">
                   {currentUser.name[0]}
                 </div>
                 <span className="text-sm font-bold text-gray-700 hidden sm:block">{currentUser.name}</span>
@@ -158,14 +191,22 @@ const PublicHome = () => {
                         <p className="text-xs text-gray-400 mt-0.5">누적 <strong className="text-gray-600">{accumulatedScore}점</strong></p>
                       </div>
                     </div>
-                    {scoreShop.length > 0 && (
+                    <div className="flex items-center gap-2">
                       <button
-                        onClick={() => { setShowScoreShop(true); setSpendSuccess(false); }}
-                        className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-4 py-2.5 rounded-2xl text-sm font-bold transition-colors shadow-sm"
+                        onClick={() => setShowScoreHistory(true)}
+                        className="flex items-center gap-2 bg-white/50 hover:bg-white/80 text-gray-700 px-4 py-2.5 rounded-2xl text-sm font-bold transition-colors shadow-sm"
                       >
-                        <ShoppingBag className="w-4 h-4" /> 점수 사용하기
+                        <History className="w-4 h-4" /> 내역 보기
                       </button>
-                    )}
+                      {scoreShop.length > 0 && (
+                        <button
+                          onClick={() => { setShowScoreShop(true); setSpendSuccess(false); }}
+                          className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-4 py-2.5 rounded-2xl text-sm font-bold transition-colors shadow-sm"
+                        >
+                          <ShoppingBag className="w-4 h-4" /> 점수 사용하기
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
@@ -199,20 +240,81 @@ const PublicHome = () => {
                   <ClipboardList className="w-6 h-6 text-orange-600" />
                   <h2 className="text-lg font-bold text-orange-900">알림장</h2>
                 </div>
-                <div className="flex-1 flex flex-col items-center justify-center text-center p-10 space-y-4">
-                  <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center mb-2 animate-bounce">
-                    <img
-                      src="https://em-content.zobj.net/source/microsoft-teams/363/party-popper_1f389.png"
-                      alt="Party"
-                      className="w-10 h-10"
-                    />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-gray-800">등록된 알림이 없어요</h3>
-                    <p className="text-gray-500 mt-2 text-sm leading-relaxed">
-                      선생님이 아직 내용을 올리지 않으셨네요.<br />오늘도 행복한 하루 보내세요!
-                    </p>
-                  </div>
+                <div className="flex-1 flex flex-col p-6 space-y-4 overflow-y-auto">
+                  {/* Calculate Pending Items */}
+                  {(() => {
+                    const unsubmittedAssignments = activeAssignments.filter(assignment => 
+                      !assignment.submittedUsers?.includes(currentUser?.id)
+                    );
+                    const unvotedSurveys = activeSurveys.filter(survey =>
+                      !survey.votedUsers?.includes(currentUser?.id)
+                    );
+                    
+                    const hasNotifications = unsubmittedAssignments.length > 0 || unvotedSurveys.length > 0;
+
+                    if (!hasNotifications) {
+                      return (
+                        <div className="flex-1 flex flex-col items-center justify-center text-center py-8">
+                          <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center mb-4 animate-bounce">
+                            <img
+                              src="https://em-content.zobj.net/source/microsoft-teams/363/party-popper_1f389.png"
+                              alt="Party"
+                              className="w-10 h-10"
+                            />
+                          </div>
+                          <h3 className="text-lg font-bold text-gray-800">등록된 알림이 없어요</h3>
+                          <p className="text-gray-500 mt-2 text-sm leading-relaxed">
+                            해야 할 과제나 참여할 설문조사가 없습니다.<br />오늘도 행복한 하루 보내세요!
+                          </p>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="space-y-3">
+                        {unsubmittedAssignments.map(assignment => (
+                          <div 
+                            key={assignment.id} 
+                            onClick={() => setActiveTab('myjob')}
+                            className="bg-blue-50 border border-blue-100 p-4 rounded-2xl flex items-start gap-3 cursor-pointer hover:bg-blue-100 transition-colors"
+                          >
+                            <div className="bg-blue-200 text-blue-700 p-2 rounded-xl shrink-0">
+                              <ClipboardList className="w-5 h-5" />
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-xs font-bold text-blue-600 bg-blue-100/50 px-2 py-0.5 rounded-full">과제/수행평가</span>
+                                <h4 className="font-bold text-gray-800 text-sm">{assignment.title}</h4>
+                              </div>
+                              <p className="text-xs text-gray-500">클릭하여 [나의 업무] 탭으로 이동 후 제출 확인</p>
+                            </div>
+                          </div>
+                        ))}
+                        
+                        {unvotedSurveys.map(survey => (
+                          <div 
+                            key={survey.id} 
+                            onClick={() => {
+                              setActiveTab('petition');
+                              setSubTab('survey');
+                            }}
+                            className="bg-indigo-50 border border-indigo-100 p-4 rounded-2xl flex items-start gap-3 cursor-pointer hover:bg-indigo-100 transition-colors"
+                          >
+                            <div className="bg-indigo-200 text-indigo-700 p-2 rounded-xl shrink-0">
+                                <AlertCircle className="w-5 h-5" />
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-xs font-bold text-indigo-600 bg-indigo-100/50 px-2 py-0.5 rounded-full">설문조사 ({survey.ministryName})</span>
+                                <h4 className="font-bold text-gray-800 text-sm">{survey.title}</h4>
+                              </div>
+                              <p className="text-xs text-gray-500">클릭하여 [국무회의] 탭으로 이동 후 투표 참여</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
                 </div>
                 <div className="bg-gray-50 px-6 py-4 border-t border-gray-100 text-center text-xs text-gray-400 font-medium">
                   학생 개별 역할은 '나의 업무' 탭에서 확인하세요
@@ -236,20 +338,18 @@ const PublicHome = () => {
           </div>
         )}
 
-        {/* PETITION TAB */}
+        {/* PETITION TAB (State Council) */}
         {activeTab === 'petition' && (
           <div className="max-w-3xl mx-auto">
-            <PetitionBoard />
+            <StateCouncil defaultTab={subTab || 'petition'} />
           </div>
         )}
 
         {/* JUDICIAL TAB */}
-        {activeTab === 'judicial' && (
-          <div className="max-w-3xl mx-auto">
-            <JudicialSystem />
-          </div>
-        )}
+        {activeTab === 'judicial' && <JudicialSystem />}
 
+        {/* MARKET TAB */}
+        {activeTab === 'market' && <FleaMarket />}
       </main>
 
       {/* =============== 하단 탭 내비게이션 (태블릿 최적화) =============== */}
@@ -258,7 +358,10 @@ const PublicHome = () => {
           {navItems.map(item => (
             <button
               key={item.id}
-              onClick={() => setActiveTab(item.id)}
+              onClick={() => {
+                setActiveTab(item.id);
+                setSubTab(null);
+              }}
               className={`
                 flex-1 flex flex-col items-center justify-center py-3 gap-1 transition-all select-none
                 ${activeTab === item.id
@@ -280,6 +383,57 @@ const PublicHome = () => {
           ))}
         </div>
       </nav>
+
+      {/* Score History Modal */}
+      {showScoreHistory && currentUser && (() => {
+        const { scoreTransactions } = useAppContext();
+        const myTransactions = scoreTransactions
+          .filter(t => t.userId === currentUser.id)
+          .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+          .slice(0, 10);
+
+        return (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-3xl p-7 max-w-md w-full shadow-2xl relative">
+              <button onClick={() => setShowScoreHistory(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+                <X size={22} />
+              </button>
+              <div className="flex items-center gap-3 mb-5">
+                <div className="w-11 h-11 bg-gray-100 rounded-2xl flex items-center justify-center">
+                  <History className="w-6 h-6 text-gray-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-800">생활태도 점수 내역</h3>
+                  <p className="text-sm text-gray-500">최근 10개의 기록만 표시됩니다.</p>
+                </div>
+              </div>
+
+              <div className="border border-gray-100 rounded-2xl overflow-hidden bg-gray-50 max-h-[60vh] overflow-y-auto">
+                {myTransactions.length === 0 ? (
+                  <p className="py-10 text-center text-sm text-gray-400">점수 기록이 없습니다.</p>
+                ) : (
+                  <div className="divide-y divide-gray-100">
+                    {myTransactions.map(txn => (
+                      <div key={txn.id} className="p-4 bg-white hover:bg-gray-50 transition-colors">
+                        <div className="flex justify-between items-start gap-4 mb-1">
+                          <p className="text-sm font-bold text-gray-800 leading-snug">{txn.reason}</p>
+                          <div className={`font-black shrink-0 ${txn.amount > 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                            {txn.amount > 0 ? '+' : ''}{txn.amount}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 mt-2">
+                          <span className="text-xs text-gray-400">{new Date(txn.timestamp).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                          {txn.isSpend && <span className="text-[10px] bg-purple-100 text-purple-600 font-bold px-1.5 py-0.5 rounded-full">사용됨</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Score Shop Modal */}
       {showScoreShop && (

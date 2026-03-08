@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../../context/AppContext';
-import { Search, BookOpen, Scale, Sparkles, AlertCircle, Coins, HeartHandshake } from 'lucide-react';
+import { Search, BookOpen, Scale, Sparkles, AlertCircle, Coins, HeartHandshake, Users } from 'lucide-react';
 import { SUGGESTED_SEARCHES } from '../../data/wikiData';
 
 const ClassWiki = () => {
-    const { wikiEntries } = useAppContext();
+    const { wikiEntries, users, ministries } = useAppContext();
     const [searchTerm, setSearchTerm] = useState('');
     const [activeCategory, setActiveCategory] = useState('ALL');
+    const [activeTab, setActiveTab] = useState('search');
 
     const filteredData = wikiEntries.filter(item => {
         const matchesSearch = 
@@ -38,11 +39,39 @@ const ClassWiki = () => {
                 <p className="text-gray-500">선생님께 질문하기 전, 스스로 답을 찾아보세요!</p>
             </div>
 
-            {/* Search Bar */}
-            <div className="max-w-xl mx-auto relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <Search className="w-6 h-6 text-gray-400" />
-                </div>
+            {/* Inner App Tab Navigator for ClassWiki */}
+            <div className="flex bg-white rounded-2xl shadow-sm border border-gray-100 p-1 overflow-hidden max-w-sm mx-auto mb-6">
+                <button
+                    onClick={() => setActiveTab('search')}
+                    className={`flex-1 py-3 flex items-center justify-center gap-2 rounded-xl text-sm font-bold transition-all ${
+                        activeTab === 'search'
+                            ? 'bg-indigo-50 text-indigo-600 my-0 shadow-sm'
+                            : 'text-gray-400 hover:bg-gray-50 hover:text-gray-600'
+                    }`}
+                >
+                    <Search className="w-5 h-5" />
+                    규칙 찾기
+                </button>
+                <button
+                    onClick={() => setActiveTab('ministry_status')}
+                    className={`flex-1 py-3 flex items-center justify-center gap-2 rounded-xl text-sm font-bold transition-all ${
+                        activeTab === 'ministry_status'
+                            ? 'bg-indigo-50 text-indigo-600 my-0 shadow-sm'
+                            : 'text-gray-400 hover:bg-gray-50 hover:text-gray-600'
+                    }`}
+                >
+                    <Users className="w-5 h-5" />
+                    부서 현황
+                </button>
+            </div>
+
+            {activeTab === 'search' && (
+                <div className="animate-in fade-in duration-300 space-y-8">
+                    {/* Search Bar */}
+                    <div className="max-w-xl mx-auto relative">
+                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                            <Search className="w-6 h-6 text-gray-400" />
+                        </div>
                 <input 
                     type="text" 
                     placeholder="무엇이 궁금한가요? (예: 청소, 벌점)" 
@@ -103,7 +132,66 @@ const ClassWiki = () => {
                     <h3 className="text-lg font-bold text-gray-600">검색 결과가 없어요</h3>
                     <p className="text-gray-400 mt-2">다른 단어로 검색해보거나 선생님께 직접 여쭤보세요!</p>
                 </div>
+                    )}
+                </div>
             )}
+
+            {/* ======================== */}
+            {/* MINISTRY STATUS TAB */}
+            {/* ======================== */}
+            {activeTab === 'ministry_status' && (() => {
+                const studentsList = users.filter(u => u.type === 'student').sort((a, b) => a.name.localeCompare(b.name));
+                const ministryGroups = (ministries || []).map(m => {
+                    return {
+                        ...m,
+                        students: studentsList.filter(s => s.ministryId === m.id)
+                    };
+                });
+                const unassigned = studentsList.filter(s => !s.ministryId);
+
+                return (
+                    <div className="space-y-6 animate-in fade-in duration-300">
+                        <div className="grid gap-4 md:grid-cols-2">
+                            {ministryGroups.map(m => (
+                                <div key={m.id} className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex flex-col hover:border-indigo-200 transition-colors">
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-xl shadow-sm border border-indigo-100">
+                                            {m.icon || m.emoji || '🏢'}
+                                        </div>
+                                        <h3 className="font-bold text-lg text-gray-800">{m.name}</h3>
+                                        <span className="ml-auto bg-indigo-50 text-indigo-600 px-3 py-1 rounded-full text-xs font-bold">{m.students.length}명</span>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                        {m.students.length > 0 ? m.students.map(s => (
+                                            <span key={s.id} className="bg-gray-50 text-gray-700 border border-gray-200 px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-100 transition-colors cursor-default">
+                                                {s.name}
+                                            </span>
+                                        )) : (
+                                            <span className="text-sm text-gray-400 italic py-1">소속 학생이 없습니다</span>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        {unassigned.length > 0 && (
+                            <div className="mt-6 bg-gray-50 p-5 rounded-2xl border border-dashed border-gray-200">
+                                <h3 className="font-bold text-gray-700 mb-3 flex items-center gap-2">
+                                    <span className="w-2 h-2 rounded-full bg-gray-400"></span>
+                                    미배정 학생 <span className="text-sm text-gray-500 font-normal ml-1">({unassigned.length}명)</span>
+                                </h3>
+                                <div className="flex flex-wrap gap-2">
+                                    {unassigned.map(s => (
+                                        <span key={s.id} className="bg-white text-gray-500 border border-gray-200 px-3 py-1.5 rounded-lg text-sm font-medium">
+                                            {s.name}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                );
+            })()}
         </div>
     );
 };

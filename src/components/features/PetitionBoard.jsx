@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../../context/AppContext';
-import { subscribeToCollection, addPetition, agreeToPetition } from '../../utils/firebaseUtils';
-import { ThumbsUp, PenTool, AlertCircle } from 'lucide-react';
+import { subscribeToCollection, addPetition, agreeToPetition, deletePetition } from '../../utils/firebaseUtils';
+import { ThumbsUp, PenTool, AlertCircle, Trash2 } from 'lucide-react';
 
 const PetitionBoard = () => {
     const { currentUser } = useAppContext();
@@ -76,9 +76,23 @@ const PetitionBoard = () => {
                         return (
                         <div 
                             key={petition.id} 
-                            className={`bg-white p-6 rounded-2xl shadow-sm border transition-all ${petition.agreeCount >= 10 ? 'border-red-400 ring-4 ring-red-50' : 'border-gray-100 hover:border-blue-200'}`}
+                            className={`bg-white p-6 rounded-2xl shadow-sm border transition-all ${petition.agreeCount >= 10 ? 'border-red-400 ring-4 ring-red-50' : 'border-gray-100 hover:border-blue-200'} relative group`}
                         >
-                            <div className="flex justify-between items-start mb-4">
+                            {currentUser?.type === 'admin' && (
+                                <button
+                                    onClick={() => {
+                                        if (window.confirm("이 청원을 정말 삭제하시겠습니까?")) {
+                                            deletePetition(petition.id);
+                                        }
+                                    }}
+                                    className="absolute top-4 right-4 p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                                    title="청원 삭제"
+                                >
+                                    <Trash2 className="w-5 h-5" />
+                                </button>
+                            )}
+
+                            <div className="flex justify-between items-start mb-4 pr-10">
                                 <div>
                                     {petition.agreeCount >= 10 && (
                                         <span className="inline-block bg-red-100 text-red-600 text-xs font-bold px-2 py-1 rounded-full mb-2 animate-pulse">

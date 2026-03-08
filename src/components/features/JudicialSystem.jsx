@@ -207,7 +207,7 @@ const STATUS_FLOW = [
     { id: 'resolved', label: '해결', color: 'green', icon: '✅' },
 ];
 
-const OUTCOMES = ['경고', '봉사활동', '화해', '사과문 작성', '학부모 상담', '기타'];
+const OUTCOMES = ['경고', '봉사활동', '화해', '사과문 작성', '학부모 상담', '기타', '벌점', '벌금'];
 
 const StatusBadge = ({ status }) => {
     const s = STATUS_FLOW.find(sf => sf.id === status) || STATUS_FLOW[0];
@@ -261,7 +261,7 @@ const StatusPipeline = ({ currentStatus }) => (
 // MAIN COMPONENT
 // ========================
 const JudicialSystem = () => {
-    const { users, incidents, addIncident, updateIncident, deleteIncident, currentUser, roles } = useAppContext();
+    const { users, incidents, addIncident, updateIncident, deleteIncident, currentUser, roles, addScoreTransaction, addFineRecord } = useAppContext();
     const { exportToSheets, isExporting, exportedUrl, setExportedUrl } = useGoogleSheetsExport();
 
     // Role & Authority
@@ -293,7 +293,7 @@ const JudicialSystem = () => {
     });
 
     // Verdict Form State
-    const [verdictData, setVerdictData] = useState({ content: '', outcome: '경고' });
+    const [verdictData, setVerdictData] = useState({ content: '', outcome: '경고', penaltyType: 'deduct', penaltyAmount: '' });
 
     // Resolution Form State
     const [resolutionText, setResolutionText] = useState('');
@@ -459,25 +459,77 @@ const JudicialSystem = () => {
 
     const openVerdict = (incident) => {
         setVerdictTarget(incident);
-        setVerdictData({ content: incident.verdict?.content || '', outcome: incident.verdict?.outcome || '경고' });
+        setVerdictData({ 
+            content: incident.verdict?.content || '', 
+            outcome: incident.verdict?.outcome || '경고',
+            penaltyType: incident.verdict?.penaltyType || 'deduct',
+            penaltyAmount: incident.verdict?.penaltyAmount ? Math.abs(incident.verdict.penaltyAmount) : ''
+        });
         setIsVerdictOpen(true);
     };
 
     const submitVerdict = async () => {
         if (!verdictData.content) { alert('판결 내용을 입력해주세요.'); return; }
+        
+        let finalPenaltyAmount = 0;
+        if (['벌점', '벌금'].includes(verdictData.outcome) && verdictData.penaltyAmount) {
+            const amount = parseInt(verdictData.penaltyAmount, 10);
+            if (isNaN(amount) || amount <= 0) {
+                alert('올바른 점수/금액을 입력해주세요. (0보다 큰 숫자)');
+                return;
+            }
+            finalPenaltyAmount = verdictData.penaltyType === 'deduct' ? -amount : amount;
+            
+            const targets = verdictTarget.perpetrators?.length > 0 ? verdictTarget.perpetrators : verdictTarget.studentIds;
+            if (targets) {
+                for (const targetId of targets) {
+                    const targetName = users.find(u => u.id === targetId)?.name || '학생';
+                    
+                    if (verdictData.outcome === '벌금' && addFineRecord) {
+                        // 벌금의 경우 파이어베이스 fine_records 에 저장 (점수 차감 별도)
+                        await addFineRecord({
+                            userId: targetId,
+                            userName: targetName,
+                            amount: Math.abs(finalPenaltyAmount),
+                            incidentId: verdictTarget.id,
+                            reason: `재판결과: 벌금 (${CATEGORY_LABELS[verdictTarget.category] || '사건'})`,
+                            judgeName: currentUser.name
+                        });
+                    } else if (verdictData.outcome === '벌점' && addScoreTransaction) {
+                        // 벌점의 경우 기존처럼 점수에서 차감/부여
+                        await addScoreTransaction({
+                            userId: targetId,
+                            amount: finalPenaltyAmount,
+                            reason: `재판결과: 벌점 (${CATEGORY_LABELS[verdictTarget.category] || '사건'})`,
+                            isSpend: false,
+                            grantedBy: currentUser.id,
+                            grantedByName: currentUser.name
+                        });
+                    }
+                }
+            }
+        }
+        
         await updateIncident(verdictTarget.id, {
             verdict: {
                 content: verdictData.content,
                 outcome: verdictData.outcome,
+                penaltyType: verdictData.penaltyType,
+                penaltyAmount: finalPenaltyAmount,
                 judgeId: currentUser.id,
                 judgeName: currentUser.name,
                 date: getLocalDateString(new Date())
             },
-            status: 'verdict'
+            status: incidentStatusAfterVerdict(verdictTarget.status)
         });
         setIsVerdictOpen(false);
         setVerdictTarget(null);
         alert('판결이 기록되었습니다.');
+    };
+    
+    // Maintain 'resolved' status if it was already resolved when editing the verdict
+    const incidentStatusAfterVerdict = (currentStatus) => {
+        return currentStatus === 'resolved' ? 'resolved' : 'verdict';
     };
 
     const openResolution = (incident) => {
@@ -815,8 +867,11 @@ const JudicialSystem = () => {
                                                         <div className="bg-purple-50 border border-purple-100 rounded-xl p-4 space-y-2">
                                                             <p className="text-xs font-bold text-purple-600 flex items-center gap-1"><Gavel className="w-3 h-3" /> 판결</p>
                                                             <p className="text-gray-700 font-medium">{incident.verdict.content}</p>
-                                                            <div className="flex items-center gap-3 text-xs text-purple-500">
-                                                                <span className="bg-purple-100 px-2 py-0.5 rounded font-bold">결과: {incident.verdict.outcome}</span>
+                                                            <div className="flex items-center gap-3 text-xs text-purple-500 flex-wrap">
+                                                                <span className="bg-purple-100 px-2 py-0.5 rounded font-bold">
+                                                                    결과: {incident.verdict.outcome}
+                                                                    {['벌점', '벌금'].includes(incident.verdict.outcome) && incident.verdict.penaltyAmount ? ` (${incident.verdict.penaltyAmount > 0 ? '+' : ''}${incident.verdict.penaltyAmount})` : ''}
+                                                                </span>
                                                                 <span>판결자: {incident.verdict.judgeName}</span>
                                                                 <span>{incident.verdict.date}</span>
                                                             </div>
@@ -854,9 +909,9 @@ const JudicialSystem = () => {
                                                         )}
 
                                                         {/* Status Change for Authority */}
-                                                        {isAuthority && incident.status === 'investigating' && (
+                                                        {isAuthority && (incident.status === 'investigating' || incident.status === 'verdict' || incident.status === 'resolved') && (
                                                             <button onClick={() => openVerdict(incident)} className="px-4 py-2 bg-purple-50 text-purple-600 hover:bg-purple-100 rounded-xl font-bold text-sm flex items-center gap-1 transition-colors">
-                                                                <PenLine className="w-4 h-4" /> 판결문 작성
+                                                                <PenLine className="w-4 h-4" /> {incident.status === 'investigating' ? '판결문 작성' : '판결문 수정'}
                                                             </button>
                                                         )}
 
@@ -1054,6 +1109,36 @@ const JudicialSystem = () => {
                                     ))}
                                 </div>
                             </div>
+                            {['벌점', '벌금'].includes(verdictData.outcome) && (
+                                <div className="bg-purple-50 p-4 rounded-xl border border-purple-100 flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-200">
+                                    <div>
+                                        <label className="block text-sm font-bold text-purple-800 mb-2">점수 부여/차감 선택</label>
+                                        <div className="flex gap-2">
+                                            <button 
+                                                type="button" 
+                                                onClick={() => setVerdictData({ ...verdictData, penaltyType: 'deduct' })}
+                                                className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${verdictData.penaltyType === 'deduct' ? 'bg-red-500 text-white shadow-sm' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}
+                                            >차감 (-)</button>
+                                            <button 
+                                                type="button" 
+                                                onClick={() => setVerdictData({ ...verdictData, penaltyType: 'reward' })}
+                                                className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${verdictData.penaltyType === 'reward' ? 'bg-green-500 text-white shadow-sm' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}
+                                            >부여 (+)</button>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-purple-800 mb-2">{verdictData.outcome === '벌금' ? '금액 (숫자만)' : '점수 (숫자만)'}</label>
+                                        <input 
+                                            type="number" 
+                                            min="1"
+                                            placeholder="예: 5"
+                                            className="w-full p-2.5 rounded-xl border border-purple-200 outline-none focus:border-purple-500 font-bold text-gray-800"
+                                            value={verdictData.penaltyAmount}
+                                            onChange={e => setVerdictData({ ...verdictData, penaltyAmount: e.target.value })}
+                                        />
+                                    </div>
+                                </div>
+                            )}
                             <div className="grid grid-cols-2 gap-3 pt-2">
                                 <button onClick={() => { setIsVerdictOpen(false); setVerdictTarget(null); }} className="py-3 rounded-xl font-bold border border-gray-200 text-gray-500 hover:bg-gray-50">취소</button>
                                 <button onClick={submitVerdict} className="py-3 rounded-xl font-bold text-white bg-purple-600 hover:bg-purple-700 shadow-md">판결 확정</button>

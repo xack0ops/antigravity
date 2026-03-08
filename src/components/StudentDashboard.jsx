@@ -111,7 +111,7 @@ const StudentDashboard = () => {
       {/* Navbar */}
       <nav className="bg-white shadow-sm border-b border-gray-100 px-6 py-4 md:py-5 md:px-8 flex justify-between items-center sticky top-0 z-10">
         <div className="font-bold text-gray-800 text-lg md:text-xl flex items-center gap-2">
-          <span className="text-xl md:text-2xl">🏫</span> 우리 반 나라
+          <span className="text-xl md:text-2xl">🏫</span> 63랜드
         </div>
         <div className="flex items-center gap-3">
           <span className="text-gray-600 font-bold text-sm md:text-base hidden sm:inline-block">{currentUser.name} {currentUser.type === 'student' ? '학생' : '선생님'}</span>
@@ -413,7 +413,7 @@ const StudentDashboard = () => {
       )}
 
       <div className="text-center py-6 text-gray-400 text-xs mt-auto">
-        <p>© 2026 우리 반 나라 · 학급 경영 시스템</p>
+        <p>© 2026 63랜드 · 학급 경영 시스템</p>
         <p className="mt-1 font-mono text-[10px] opacity-50">v1.2 (Updated)</p>
       </div>
     </div>

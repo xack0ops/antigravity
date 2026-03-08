@@ -12,15 +12,20 @@ import WikiManager from './WikiManager';
 import JobManagement from './features/JobManagement';
 import ScoreManager from './features/ScoreManager';
 import LifeNoteManager from './features/LifeNoteManager';
+import AssignmentManager from './features/AssignmentManager';
+import FineRecordManager from './features/FineRecordManager';
+import ClassBudgetAdmin from './features/ClassBudgetAdmin';
+import StateCouncil from './features/StateCouncil';
 
 const AdminDashboard = () => {
-  const { users, roles, tasks, ministries, assignStudentRoles, verifyTask, updatePassword, addUser, deleteUser, logout, fetchAllTimetables, saveTimetable, teacherMessages, deleteTeacherMessage, currentUser, scoreTransactions, scoreShop, addScoreShopItem, updateScoreShopItem, deleteScoreShopItem, getUserScoreSummary } = useAppContext();
+  const { users, roles, tasks, ministries, assignStudentRoles, verifyTask, updatePassword, addUser, deleteUser, logout, fetchAllTimetables, saveTimetable, teacherMessages, deleteTeacherMessage, currentUser, scoreTransactions, scoreShop, addScoreShopItem, updateScoreShopItem, deleteScoreShopItem, getUserScoreSummary, impersonateUser } = useAppContext();
   const [activeTab, setActiveTab] = useState('management'); // 'management', 'curriculum', 'tools', 'judicial', 'messages'
   const [activeTool, setActiveTool] = useState(null); // 'timetable', etc.
   
   // Curriculum State
   const [timetables, setTimetables] = useState([]);
   const [curriculumStats, setCurriculumStats] = useState({});
+  const [assignmentTab, setAssignmentTab] = useState('life_note'); // 'life_note' or 'assignment'
 
   useEffect(() => {
       if (activeTab === 'curriculum') {
@@ -448,11 +453,17 @@ const AdminDashboard = () => {
                                         </div>
                                     </div>
 
-                                    {/* Delete Button */}
-                                    <div className="mt-3 text-right">
+                                    {/* Delete Button & Impersonate */}
+                                    <div className="mt-3 flex items-center justify-between">
+                                        <button 
+                                            onClick={(e) => { e.stopPropagation(); impersonateUser(student.id); }}
+                                            className="text-xs px-3 py-1.5 bg-indigo-50 border border-indigo-200 text-indigo-600 rounded-lg hover:bg-indigo-100 font-bold transition-colors flex items-center gap-1"
+                                        >
+                                            <ExternalLink className="w-3 h-3" /> 이 학생으로 접속 (테스트)
+                                        </button>
                                         <button 
                                             onClick={(e) => { e.stopPropagation(); handleDeleteStudent(student.id, student.name); }}
-                                            className="text-xs text-red-400 hover:text-red-600 hover:underline flex items-center justify-end gap-1 ml-auto"
+                                            className="text-xs text-red-400 hover:text-red-600 hover:underline flex items-center gap-1"
                                         >
                                             <Trash2 className="w-3 h-3" /> 학생 삭제
                                         </button>
@@ -579,14 +590,53 @@ const AdminDashboard = () => {
 
                             <button 
                                 onClick={() => setActiveTool('life_note')}
-                                className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md hover:border-indigo-200 transition-all flex flex-col items-center gap-4 group"
+                                className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md hover:border-sky-200 transition-all flex flex-col items-center gap-4 group"
                             >
-                                <div className="w-16 h-16 bg-indigo-50 rounded-full flex items-center justify-center group-hover:bg-indigo-600 transition-colors">
-                                    <BookOpen className="w-8 h-8 text-indigo-600 group-hover:text-white transition-colors" />
+                                <div className="w-16 h-16 bg-sky-50 rounded-full flex items-center justify-center group-hover:bg-sky-600 transition-colors">
+                                    <BookOpen className="w-8 h-8 text-sky-600 group-hover:text-white transition-colors" />
                                 </div>
                                 <div className="text-center">
-                                    <h3 className="font-bold text-lg text-gray-800">인생노트 점검</h3>
-                                    <p className="text-gray-400 text-sm mt-1">교육부 권한</p>
+                                    <h3 className="font-bold text-lg text-gray-800">과제 점검 (인생노트)</h3>
+                                    <p className="text-gray-400 text-sm mt-1">통합 관리 · 교육부 권한</p>
+                                </div>
+                            </button>
+
+                            <button 
+                                onClick={() => setActiveTool('fine_records')}
+                                className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md hover:border-yellow-200 transition-all flex flex-col items-center gap-4 group"
+                            >
+                                <div className="w-16 h-16 bg-yellow-50 rounded-full flex items-center justify-center group-hover:bg-yellow-600 transition-colors">
+                                    <BookOpen className="w-8 h-8 text-yellow-600 group-hover:text-white transition-colors" />
+                                </div>
+                                <div className="text-center">
+                                    <h3 className="font-bold text-lg text-gray-800">벌금 기록지</h3>
+                                    <p className="text-gray-400 text-sm mt-1">기획재정부 권한</p>
+                                </div>
+                            </button>
+
+                            <button 
+                                onClick={() => setActiveTool('class_budget')}
+                                className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md hover:border-emerald-200 transition-all flex flex-col items-center gap-4 group"
+                            >
+                                <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center group-hover:bg-emerald-600 transition-colors">
+                                    <BookOpen className="w-8 h-8 text-emerald-600 group-hover:text-white transition-colors" />
+                                </div>
+                                <div className="text-center">
+                                    <h3 className="font-bold text-lg text-gray-800">학급 예산 설정</h3>
+                                    <p className="text-gray-400 text-sm mt-1">기획재정부 총 예산</p>
+                                </div>
+                            </button>
+
+                            <button 
+                                onClick={() => setActiveTool('petition_board')}
+                                className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md hover:border-red-200 transition-all flex flex-col items-center gap-4 group"
+                            >
+                                <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center group-hover:bg-red-600 transition-colors">
+                                    <Scale className="w-8 h-8 text-red-600 group-hover:text-white transition-colors" />
+                                </div>
+                                <div className="text-center">
+                                    <h3 className="font-bold text-lg text-gray-800">국무회의 관리</h3>
+                                    <p className="text-gray-400 text-sm mt-1">청원/설문 관리 권한</p>
                                 </div>
                             </button>
                         </div>
@@ -597,7 +647,10 @@ const AdminDashboard = () => {
                                      {activeTool === 'timetable_editor' && <><Calendar className="w-6 h-6 text-indigo-600"/> 시간표 관리자</>}
                                      {activeTool === 'wiki_manager' && <><BookOpen className="w-6 h-6 text-indigo-600"/> 물어보살 관리자</>}
                                      {activeTool === 'job_management' && <><Shield className="w-6 h-6 text-indigo-600"/> 업무 관리 (조직도 구성)</>}
-                                 {activeTool === 'life_note' && <><BookOpen className="w-6 h-6 text-indigo-600"/> 인생노트 점검</>}
+                                 {activeTool === 'life_note' && <><BookOpen className="w-6 h-6 text-sky-600"/> 과제 / 수행평가 / 인생노트 점검</>}
+                                 {activeTool === 'fine_records' && <><BookOpen className="w-6 h-6 text-yellow-600"/> 벌금 기록지</>}
+                                 {activeTool === 'class_budget' && <><BookOpen className="w-6 h-6 text-emerald-600"/> 학급 예산 설정</>}
+                                 {activeTool === 'petition_board' && <><Scale className="w-6 h-6 text-red-600"/> 국무회의 관리 (청원 · 설문)</>}
                                 </h3>
                                 <button 
                                     onClick={() => setActiveTool(null)}
@@ -617,7 +670,26 @@ const AdminDashboard = () => {
                                  <JobManagement />
                              )}
                              {activeTool === 'life_note' && (
-                                 <LifeNoteManager />
+                                 <div>
+                                     <div className="flex gap-2 mb-6 border-b border-gray-100 pb-2">
+                                         <button 
+                                            onClick={() => setAssignmentTab('life_note')}
+                                            className={`px-4 py-2 font-bold text-sm rounded-lg transition-colors ${assignmentTab === 'life_note' ? 'bg-indigo-100 text-indigo-700' : 'text-gray-500 hover:bg-gray-50'}`}
+                                         >
+                                            일일 인생노트 점검
+                                         </button>
+                                         <button 
+                                            onClick={() => setAssignmentTab('assignment')}
+                                            className={`px-4 py-2 font-bold text-sm rounded-lg transition-colors ${assignmentTab === 'assignment' ? 'bg-sky-100 text-sky-700' : 'text-gray-500 hover:bg-gray-50'}`}
+                                         >
+                                            과제/수행평가 점검
+                                         </button>
+                                     </div>
+                                     {assignmentTab === 'life_note' ? <LifeNoteManager /> : <AssignmentManager />}
+                                 </div>
+                             )}
+                             {activeTool === 'petition_board' && (
+                                 <StateCouncil />
                              )}
                              {activeTool === 'score_shop' && (
                                  <ScoreShopAdmin
@@ -630,6 +702,12 @@ const AdminDashboard = () => {
                                      getUserScoreSummary={getUserScoreSummary}
                                      ScoreManagerComponent={ScoreManager}
                                  />
+                             )}
+                             {activeTool === 'fine_records' && (
+                                 <FineRecordManager />
+                             )}
+                             {activeTool === 'class_budget' && (
+                                 <ClassBudgetAdmin />
                              )}
                         </div>
                     )}

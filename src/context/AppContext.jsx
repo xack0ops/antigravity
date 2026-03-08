@@ -30,7 +30,12 @@ export const AppProvider = ({ children }) => {
   const [ministries, setMinistries] = useState([]);
   const [scoreTransactions, setScoreTransactions] = useState([]);
   const [scoreShop, setScoreShop] = useState([]);
+  const [fineRecords, setFineRecords] = useState([]);
+  const [classBudget, setClassBudget] = useState(0);
+  const [budgetTransactions, setBudgetTransactions] = useState([]);
+  const [marketPosts, setMarketPosts] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
+  const [originalAdminId, setOriginalAdminId] = useState(null);
   const [currentTimetable, setCurrentTimetable] = useState({ periods: Array(6).fill('') });
   const [loading, setLoading] = useState(true);
 
@@ -101,20 +106,6 @@ export const AppProvider = ({ children }) => {
     const unsubWiki = onSnapshot(collection(db, 'wiki'), (snapshot) => {
         const wikiList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setWikiEntries(wikiList);
-        
-        // Auto-sync: Check if any hardcoded WIKI_DATA is missing in DB (e.g. new manuals)
-        if (wikiList.length > 0) {
-             const existingIds = new Set(wikiList.map(item => item.id));
-             const missingItems = WIKI_DATA.filter(item => !existingIds.has(item.id));
-             
-             if (missingItems.length > 0) {
-                 console.log(`Found ${missingItems.length} missing wiki items. Syncing...`);
-                 seedWiki(missingItems);
-             }
-        } else {
-            // Totally empty, seed all
-            seedWiki(WIKI_DATA);
-        }
     });
 
     // Listen to Incidents (Judicial System)
@@ -143,6 +134,39 @@ export const AppProvider = ({ children }) => {
     const unsubScoreShop = onSnapshot(collection(db, 'score_shop'), (snapshot) => {
         setScoreShop(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
     });
+
+    // Listen to Fine Records
+    const unsubFineRecords = onSnapshot(
+        query(collection(db, 'fine_records'), orderBy('timestamp', 'desc')),
+        (snapshot) => {
+            setFineRecords(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+        }
+    );
+
+    // Listen to Class Budget
+    const unsubClassBudget = onSnapshot(doc(db, 'settings', 'class_budget'), (docSnap) => {
+        if (docSnap.exists()) {
+            setClassBudget(docSnap.data().amount || 0);
+        } else {
+            setClassBudget(0);
+        }
+    });
+
+    // Listen to Budget Transactions
+    const unsubBudgetTransactions = onSnapshot(
+        query(collection(db, 'budget_transactions'), orderBy('timestamp', 'desc')),
+        (snapshot) => {
+            setBudgetTransactions(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+        }
+    );
+
+    // Listen to Flea Market Posts
+    const unsubMarketPosts = onSnapshot(
+        query(collection(db, 'market_posts'), orderBy('timestamp', 'desc')),
+        (snapshot) => {
+            setMarketPosts(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+        }
+    );
 
     // Daily and Weekly task reset
     const checkAndResetTasks = async () => {
@@ -227,6 +251,10 @@ export const AppProvider = ({ children }) => {
       unsubMessages();
       unsubScoreTransactions();
       unsubScoreShop();
+      unsubFineRecords();
+      unsubClassBudget();
+      unsubBudgetTransactions();
+      unsubMarketPosts();
     };
   }, []);
 
@@ -244,6 +272,12 @@ export const AppProvider = ({ children }) => {
     INITIAL_DATA.tasks.forEach(task => {
         const ref = doc(db, 'tasks', task.id);
         batch.set(ref, { ...task, status: 'pending' });
+    });
+
+    // Seed Wiki
+    WIKI_DATA.forEach(item => {
+        const ref = doc(db, 'wiki', item.id);
+        batch.set(ref, item);
     });
 
     await batch.commit();
@@ -286,16 +320,6 @@ export const AppProvider = ({ children }) => {
     console.log('Role duties/descriptions synced.');
   };
 
-  const seedWiki = async (itemsToSeed) => {
-      const batch = writeBatch(db);
-      itemsToSeed.forEach(item => {
-          const ref = doc(db, 'wiki', item.id);
-          batch.set(ref, item);
-      });
-      await batch.commit();
-      console.log("Wiki seeding/sync complete");
-  };
-
   const syncTasks = async (tasksToSync) => {
       const batch = writeBatch(db);
       tasksToSync.forEach(task => {
@@ -310,9 +334,16 @@ export const AppProvider = ({ children }) => {
   // Restore session on mount
   useEffect(() => {
     const storedUserId = localStorage.getItem('currentUserId');
-    if (storedUserId && users.length > 0) {
-        const foundUser = users.find(u => u.id === storedUserId);
-        if (foundUser) setCurrentUser(foundUser);
+    const storedAdminId = localStorage.getItem('originalAdminId');
+    
+    if (users.length > 0) {
+        if (storedUserId) {
+            const foundUser = users.find(u => u.id === storedUserId);
+            if (foundUser) setCurrentUser(foundUser);
+        }
+        if (storedAdminId) {
+            setOriginalAdminId(storedAdminId);
+        }
     }
   }, [users]);
 
@@ -324,9 +355,34 @@ export const AppProvider = ({ children }) => {
     }
   };
 
+  const impersonateUser = (studentId) => {
+      const student = users.find(u => u.id === studentId);
+      if (student && currentUser && currentUser.type === 'admin') {
+          setOriginalAdminId(currentUser.id);
+          localStorage.setItem('originalAdminId', currentUser.id);
+          
+          setCurrentUser(student);
+          localStorage.setItem('currentUserId', studentId);
+      }
+  };
+
+  const stopImpersonating = () => {
+      if (originalAdminId) {
+          const admin = users.find(u => u.id === originalAdminId);
+          if (admin) {
+              setCurrentUser(admin);
+              localStorage.setItem('currentUserId', admin.id);
+          }
+          setOriginalAdminId(null);
+          localStorage.removeItem('originalAdminId');
+      }
+  };
+
   const logout = () => {
       setCurrentUser(null);
+      setOriginalAdminId(null);
       localStorage.removeItem('currentUserId');
+      localStorage.removeItem('originalAdminId');
   };
 
   // Task Actions (Write to Firestore)
@@ -499,6 +555,82 @@ export const AppProvider = ({ children }) => {
       await deleteDoc(doc(db, 'score_shop', id));
   };
 
+  // Fine Records Actions
+  const addFineRecord = async (data) => {
+      await addDoc(collection(db, 'fine_records'), {
+          ...data,
+          status: 'unpaid', // unpaid, paid
+          timestamp: new Date().toISOString()
+      });
+  };
+  const updateFineRecordStatus = async (id, status) => {
+      await updateDoc(doc(db, 'fine_records', id), { status });
+  };
+
+  // Class Budget Actions
+  const updateClassBudget = async (amount) => {
+      await setDoc(doc(db, 'settings', 'class_budget'), {
+          amount,
+          updatedAt: new Date().toISOString(),
+          updatedBy: currentUser?.id
+      });
+  };
+
+  const addBudgetTransaction = async (data) => {
+      await addDoc(collection(db, 'budget_transactions'), {
+          ...data,
+          timestamp: new Date().toISOString()
+      });
+  };
+
+  const deleteBudgetTransaction = async (id) => {
+      await deleteDoc(doc(db, 'budget_transactions', id));
+  };
+
+  // Flea Market Actions
+  const addMarketPost = async (data) => {
+      await addDoc(collection(db, 'market_posts'), {
+          ...data,
+          status: 'active', // 'active', 'completed'
+          participants: [], // For '번개' type
+          timestamp: new Date().toISOString()
+      });
+  };
+
+  const updateMarketPostStatus = async (id, status) => {
+      await updateDoc(doc(db, 'market_posts', id), { status });
+  };
+
+  const deleteMarketPost = async (id) => {
+      await deleteDoc(doc(db, 'market_posts', id));
+  };
+
+  const joinMarketPost = async (postId, user) => {
+      const postRef = doc(db, 'market_posts', postId);
+      const postSnap = await getDoc(postRef);
+      if (postSnap.exists()) {
+          const post = postSnap.data();
+          const currentParticipants = post.participants || [];
+          if (!currentParticipants.some(p => p.id === user.id)) {
+             await updateDoc(postRef, {
+                 participants: [...currentParticipants, { id: user.id, name: user.name }]
+             });
+          }
+      }
+  };
+
+  const leaveMarketPost = async (postId, userId) => {
+      const postRef = doc(db, 'market_posts', postId);
+      const postSnap = await getDoc(postRef);
+      if (postSnap.exists()) {
+          const post = postSnap.data();
+          const currentParticipants = post.participants || [];
+          await updateDoc(postRef, {
+              participants: currentParticipants.filter(p => p.id !== userId)
+          });
+      }
+  };
+
   // Helper: compute score summary for a user
   const getUserScoreSummary = (userId) => {
       const userTxns = scoreTransactions.filter(t => t.userId === userId);
@@ -559,10 +691,10 @@ export const AppProvider = ({ children }) => {
   return (
     <AppContext.Provider value={{
       users, roles, ministries, tasks, wikiEntries, incidents, teacherMessages,
-      scoreTransactions, scoreShop,
-      currentUser,
+      scoreTransactions, scoreShop, fineRecords, classBudget, budgetTransactions, marketPosts,
+      currentUser, originalAdminId,
       loading,
-      login, logout,
+      login, logout, impersonateUser, stopImpersonating,
       toggleTask, verifyTask, assignStudentRoles, updatePassword,
       addMinistry, updateMinistry, deleteMinistry,
       addRole, updateRole, deleteRole,
@@ -573,6 +705,9 @@ export const AppProvider = ({ children }) => {
       addTeacherMessage, deleteTeacherMessage,
       addScoreTransaction, deleteScoreTransaction,
       addScoreShopItem, updateScoreShopItem, deleteScoreShopItem,
+      addFineRecord, updateFineRecordStatus,
+      updateClassBudget, addBudgetTransaction, deleteBudgetTransaction,
+      addMarketPost, updateMarketPostStatus, deleteMarketPost, joinMarketPost, leaveMarketPost,
       getUserScoreSummary,
       syncRoles,
       currentTimetable, fetchTimetable, saveTimetable, fetchAllTimetables, subscribeToTimetable
