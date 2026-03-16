@@ -715,6 +715,10 @@ const JudicialSystem = () => {
                             className={`flex-1 py-3 rounded-lg font-bold flex items-center justify-center gap-2 transition-all text-sm ${activeTab === 'stats' ? 'bg-emerald-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}>
                             <BarChart3 className="w-4 h-4" /> 통계
                         </button>
+                        <button onClick={() => setActiveTab('guide')}
+                            className={`flex-1 py-3 rounded-lg font-bold flex items-center justify-center gap-2 transition-all text-sm ${activeTab === 'guide' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}>
+                            <BookOpen className="w-4 h-4" /> 가이드
+                        </button>
                     </>
                 ) : (
                     <>
@@ -729,6 +733,10 @@ const JudicialSystem = () => {
                         <button onClick={() => { setActiveTab('submit'); setIsFormOpen(true); }}
                             className={`flex-1 py-3 rounded-lg font-bold flex items-center justify-center gap-2 transition-all text-sm ${activeTab === 'submit' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}>
                             <Send className="w-4 h-4" /> 사건 접수
+                        </button>
+                        <button onClick={() => setActiveTab('guide')}
+                            className={`flex-1 py-3 rounded-lg font-bold flex items-center justify-center gap-2 transition-all text-sm ${activeTab === 'guide' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}>
+                            <BookOpen className="w-4 h-4" /> 가이드
                         </button>
                     </>
                 )}
@@ -1100,6 +1108,107 @@ const JudicialSystem = () => {
                             {isAuthority && <p className="text-gray-400 text-sm mt-1">위의 &apos;법 추가&apos; 버튼으로 새로운 법을 등록해보세요.</p>}
                         </div>
                     )}
+                </div>
+            )}
+
+            {/* ======================== */}
+            {/* GUIDE TAB */}
+            {/* ======================== */}
+            {activeTab === 'guide' && (
+                <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
+                    <div className="bg-white rounded-2xl border border-blue-100 shadow-sm overflow-hidden">
+                        <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-6 text-white text-center">
+                            <h2 className="text-2xl font-black mb-2 flex justify-center items-center gap-2">
+                                <Scale className="w-6 h-6 text-blue-200" /> 솔로몬의 재판소: 앱 기반 자치 법정 가이드
+                            </h2>
+                            <p className="text-blue-100 font-medium">&quot;감정이 아닌 법으로, 억울함 없는 육삼랜드를 만듭니다!&quot;</p>
+                            <p className="text-sm text-blue-200 mt-2">이 가이드는 &apos;솔로몬의 재판소&apos; 앱을 활용하여 학급 내 사건을 접수하고, 조사하며, 최종 판결을 내리는 실제 과정을 안내합니다.</p>
+                        </div>
+                        <div className="p-6 md:p-8 space-y-8">
+                            
+                            {/* 1단계 */}
+                            <div className="flex gap-4">
+                                <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-700 font-black text-xl flex items-center justify-center shrink-0">1</div>
+                                <div>
+                                    <h3 className="text-lg font-bold text-gray-800 mb-1 flex items-center gap-2">📅 1단계: 사건 접수 (접수 단계)</h3>
+                                    <p className="text-sm font-bold text-indigo-600 mb-3">누가? 행정안전부(경찰), 또는 피해를 입은 국민(시민)</p>
+                                    <div className="bg-gray-50 p-4 rounded-xl text-gray-700 text-sm space-y-2 leading-relaxed">
+                                        <p><strong>어떻게?</strong></p>
+                                        <ul className="list-disc pl-5 space-y-1">
+                                            <li><strong>[사건 접수]</strong> 또는 <strong>[기록 추가]</strong> 버튼을 눌러 사건을 등록합니다.</li>
+                                            <li><strong>내용 입력:</strong> 언제, 어디서, 누가, 어떤 규칙을 어겼는지(예: 복도에서 친구와 떠듦)를 정확하고 객관적으로 기록합니다.</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 2단계 */}
+                            <div className="flex gap-4">
+                                <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-700 font-black text-xl flex items-center justify-center shrink-0">2</div>
+                                <div>
+                                    <h3 className="text-lg font-bold text-gray-800 mb-1 flex items-center gap-2">🔍 2단계: 사실 확인 (조사중 단계)</h3>
+                                    <p className="text-sm font-bold text-blue-600 mb-3">누가? 대법원장 또는 지정된 검사(경찰)</p>
+                                    <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl text-gray-700 text-sm space-y-2 leading-relaxed">
+                                        <p><strong>어떻게?</strong></p>
+                                        <ul className="list-disc pl-5 space-y-1">
+                                            <li>피고인(의심받는 친구)과 목격자의 이야기를 각각 듣습니다.</li>
+                                            <li>억울한 점은 없는지, 규칙 위반이 확실한지 증거를 수집합니다.</li>
+                                            <li>사실 관계가 명확하지 않을 경우 관련 부서(행안부 등)에 추가 조사를 요청할 수 있습니다.</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 3단계 */}
+                            <div className="flex gap-4">
+                                <div className="w-12 h-12 rounded-2xl bg-purple-100 text-purple-700 font-black text-xl flex items-center justify-center shrink-0">3</div>
+                                <div>
+                                    <h3 className="text-lg font-bold text-gray-800 mb-1 flex items-center gap-2">👨‍⚖️ 3단계: 판결 결정 (판결 단계)</h3>
+                                    <p className="text-sm font-bold text-purple-600 mb-3">누가? 대법원장 (단독 또는 배심원과 함께)</p>
+                                    <div className="bg-purple-50 border border-purple-100 p-4 rounded-xl text-gray-700 text-sm space-y-2 leading-relaxed">
+                                        <p><strong>어떻게?</strong></p>
+                                        <ul className="list-disc pl-5 space-y-1">
+                                            <li><strong>자체 판결 또는 법정 개정:</strong> 사안이 가볍거나 사실관계가 명확할 경우, 대법원장은 별도의 법정을 열지 않고 헌법에 근거하여 즉시 자체 판결을 내릴 수 있습니다. 만약 사안이 복잡하거나 친구들 간의 의견 대립이 심할 경우에만 자치 법정을 엽니다.</li>
+                                            <li><strong>최종 진술 확인:</strong> 판결 전, 피고인에게 마지막으로 하고 싶은 말이 있는지 확인합니다.</li>
+                                            <li><strong>판결 입력:</strong> 앱에서 <strong>[판결문 수정]</strong>을 눌러 결정된 내용을 입력합니다.<br/>(예시: &quot;벌금 부과 - 결과: 벌금, 10, 판결자: 대법원장&quot;)</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 4단계 */}
+                            <div className="flex gap-4">
+                                <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-700 font-black text-xl flex items-center justify-center shrink-0">4</div>
+                                <div>
+                                    <h3 className="text-lg font-bold text-gray-800 mb-1 flex items-center gap-2">✅ 4단계: 집행 및 마무리 (해결 단계)</h3>
+                                    <p className="text-sm font-bold text-emerald-600 mb-3">누가? 대법원장 & 기획재정부(국세청장)</p>
+                                    <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-xl text-gray-700 text-sm space-y-2 leading-relaxed">
+                                        <p><strong>어떻게?</strong></p>
+                                        <ul className="list-disc pl-5 space-y-1">
+                                            <li><strong>벌금 징수:</strong> 판결이 확정되면 기재부에게 알려 해당 금액만큼 벌금을 차감하도록 요청합니다.</li>
+                                            <li><strong>기록 완료:</strong> 벌금 납부나 정해진 반성 활동이 완료되면 앱에서 <strong>[해결 완료]</strong> 버튼을 누릅니다.</li>
+                                            <li>사건의 모든 처리가 완료되면 상태바에 체크 표시가 들어오며 종료됩니다.</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 꿀팁 */}
+                            <div className="mt-8 bg-amber-50 border border-amber-200 rounded-2xl p-6">
+                                <h4 className="text-base font-black text-amber-800 mb-3 flex items-center gap-2">💡 사법부를 위한 앱 활용 꿀팁</h4>
+                                <ul className="space-y-3">
+                                    <li className="flex gap-2 text-sm text-gray-700">
+                                        <span className="shrink-0 bg-white shadow-sm p-1 rounded font-bold text-amber-600">통계 확인</span>
+                                        <span>앱 상단의 <strong>[통계]</strong> 탭을 정기적으로 확인하여 우리 반에서 가장 많이 발생하는 위반 사항이 무엇인지 분석해 보세요.</span>
+                                    </li>
+                                    <li className="flex gap-2 text-sm text-gray-700">
+                                        <span className="shrink-0 bg-white shadow-sm p-1 rounded font-bold text-amber-600">투명한 공개</span>
+                                        <span>재판 결과는 모두가 볼 수 있도록 앱의 <strong>[사건 기록부]</strong>에 항상 최신 상태로 유지하세요.</span>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             )}
 

@@ -88,17 +88,25 @@ export const AppProvider = ({ children }) => {
       setTasks(tasksList);
       setLoading(false);
 
-      // Auto-sync tasks if "action" field is missing in DB but exists in Code (e.g. Judicial Update)
+      // Auto-sync tasks action fields safely without overwriting name/frequency
       if (tasksList.length > 0) {
           const tasksWithAction = INITIAL_DATA.tasks.filter(t => t.action);
-          const needsUpdate = tasksWithAction.some(localTask => {
+          const tasksToUpdate = [];
+
+          tasksWithAction.forEach(localTask => {
               const dbTask = tasksList.find(t => t.id === localTask.id);
-              return dbTask && !dbTask.action;
+              if (dbTask && !dbTask.action) {
+                  tasksToUpdate.push({ id: dbTask.id, action: localTask.action });
+              }
           });
 
-          if (needsUpdate) {
-              console.log("Syncing tasks with new actions...");
-              syncTasks(INITIAL_DATA.tasks);
+          if (tasksToUpdate.length > 0) {
+              console.log("Syncing tasks with new actions (safely)...");
+              const batch = writeBatch(db);
+              tasksToUpdate.forEach(t => {
+                  batch.update(doc(db, 'tasks', t.id), { action: t.action });
+              });
+              batch.commit();
           }
       }
     });
@@ -319,7 +327,7 @@ export const AppProvider = ({ children }) => {
     await batch.commit();
   };
 
-  const syncRoles = async (rolesToSync) => {
+  const syncRoles = async (rolesToSync = INITIAL_DATA.roles) => {
     const batch = writeBatch(db);
     rolesToSync.forEach(role => {
       const ref = doc(db, 'roles', role.id);
@@ -328,17 +336,6 @@ export const AppProvider = ({ children }) => {
     });
     await batch.commit();
     console.log('Role duties/descriptions synced.');
-  };
-
-  const syncTasks = async (tasksToSync) => {
-      const batch = writeBatch(db);
-      tasksToSync.forEach(task => {
-          const ref = doc(db, 'tasks', task.id);
-          // Use merge:true to preserve status but update logic fields like action
-          batch.set(ref, task, { merge: true });
-      });
-      await batch.commit();
-      console.log("Tasks synced with codebase.");
   };
 
   // Restore session on mount
