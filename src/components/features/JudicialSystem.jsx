@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback, useRef } from 'react';
 import { useAppContext } from '../../context/AppContext';
-import { Scale, Gavel, User, Calendar, MapPin, FileText, Plus, Trash2, Search, AlertCircle, CheckCircle, XCircle, Inbox, Send, Eye, EyeOff, BarChart3, HeartHandshake, ChevronDown, ChevronUp, Users, PenLine, X, Sheet, Loader2, ExternalLink } from 'lucide-react';
+import { Scale, Gavel, User, Calendar, MapPin, FileText, Plus, Trash2, Search, AlertCircle, CheckCircle, XCircle, Inbox, Send, Eye, EyeOff, BarChart3, HeartHandshake, ChevronDown, ChevronUp, Users, PenLine, X, Sheet, Loader2, ExternalLink, BookOpen, Edit3, ScrollText } from 'lucide-react';
 import { getLocalDateString } from '../../utils/dateUtils';
 import { GOOGLE_CLIENT_ID, GOOGLE_SHEETS_SCOPE, SPREADSHEET_TITLE } from '../../googleConfig';
 import { db } from '../../firebase';
@@ -261,7 +261,7 @@ const StatusPipeline = ({ currentStatus }) => (
 // MAIN COMPONENT
 // ========================
 const JudicialSystem = () => {
-    const { users, incidents, addIncident, updateIncident, deleteIncident, currentUser, roles, addScoreTransaction, addFineRecord } = useAppContext();
+    const { users, incidents, addIncident, updateIncident, deleteIncident, currentUser, roles, addScoreTransaction, addFineRecord, laws, addLaw, updateLaw, deleteLaw } = useAppContext();
     const { exportToSheets, isExporting, exportedUrl, setExportedUrl } = useGoogleSheetsExport();
 
     // Role & Authority
@@ -293,7 +293,12 @@ const JudicialSystem = () => {
     });
 
     // Verdict Form State
-    const [verdictData, setVerdictData] = useState({ content: '', outcome: '경고', penaltyType: 'deduct', penaltyAmount: '' });
+    const [verdictData, setVerdictData] = useState({ content: '', outcome: '경고', penaltyType: 'deduct', penaltyAmount: '', selectedLawIds: [] });
+
+    // Law Form State (63법전)
+    const [isLawFormOpen, setIsLawFormOpen] = useState(false);
+    const [editingLaw, setEditingLaw] = useState(null);
+    const [lawFormData, setLawFormData] = useState({ name: '', content: '', punishment: '', lawType: 'punishment' });
 
     // Resolution Form State
     const [resolutionText, setResolutionText] = useState('');
@@ -463,9 +468,69 @@ const JudicialSystem = () => {
             content: incident.verdict?.content || '', 
             outcome: incident.verdict?.outcome || '경고',
             penaltyType: incident.verdict?.penaltyType || 'deduct',
-            penaltyAmount: incident.verdict?.penaltyAmount ? Math.abs(incident.verdict.penaltyAmount) : ''
+            penaltyAmount: incident.verdict?.penaltyAmount ? Math.abs(incident.verdict.penaltyAmount) : '',
+            selectedLawIds: incident.verdict?.selectedLawIds || []
         });
         setIsVerdictOpen(true);
+    };
+
+    // Generate verdict content from selected laws
+    const generateVerdictFromLaws = (selectedIds) => {
+        if (selectedIds.length === 0) return '';
+        const selectedLaws = laws.filter(l => selectedIds.includes(l.id));
+        return selectedLaws.map(law => {
+            const isWelfare = law.lawType === 'welfare';
+            return `[${isWelfare ? '적용 법조항' : '위반 법조항'}] 제${law.order}조 「${law.name}」 ${isWelfare ? '적용' : '위반'}\n[규칙 내용] ${law.content}\n[${isWelfare ? '복지/혜택' : '처벌'}] ${law.punishment}`;
+        }).join('\n\n---\n\n');
+    };
+
+    const toggleVerdictLaw = (lawId) => {
+        setVerdictData(prev => {
+            const newIds = prev.selectedLawIds.includes(lawId)
+                ? prev.selectedLawIds.filter(id => id !== lawId)
+                : [...prev.selectedLawIds, lawId];
+            const autoContent = generateVerdictFromLaws(newIds);
+            return { ...prev, selectedLawIds: newIds, content: autoContent };
+        });
+    };
+
+    // Law CRUD handlers
+    const openLawForm = (law = null) => {
+        if (law) {
+            setEditingLaw(law);
+            setLawFormData({ name: law.name, content: law.content, punishment: law.punishment, lawType: law.lawType || 'punishment' });
+        } else {
+            setEditingLaw(null);
+            setLawFormData({ name: '', content: '', punishment: '', lawType: 'punishment' });
+        }
+        setIsLawFormOpen(true);
+    };
+
+    const closeLawForm = () => {
+        setIsLawFormOpen(false);
+        setEditingLaw(null);
+        setLawFormData({ name: '', content: '', punishment: '', lawType: 'punishment' });
+    };
+
+    const handleLawSubmit = async () => {
+        if (!lawFormData.name || !lawFormData.content || !lawFormData.punishment) {
+            alert('규칙 이름, 내용, 위반시 처벌을 모두 입력해주세요.');
+            return;
+        }
+        if (editingLaw) {
+            await updateLaw(editingLaw.id, lawFormData);
+            alert('법전이 수정되었습니다.');
+        } else {
+            await addLaw(lawFormData);
+            alert('새로운 법이 추가되었습니다.');
+        }
+        closeLawForm();
+    };
+
+    const handleDeleteLaw = async (id) => {
+        if (window.confirm('이 법을 삭제하시겠습니까?')) {
+            await deleteLaw(id);
+        }
     };
 
     const submitVerdict = async () => {
@@ -516,6 +581,7 @@ const JudicialSystem = () => {
                 outcome: verdictData.outcome,
                 penaltyType: verdictData.penaltyType,
                 penaltyAmount: finalPenaltyAmount,
+                selectedLawIds: verdictData.selectedLawIds || [],
                 judgeId: currentUser.id,
                 judgeName: currentUser.name,
                 date: getLocalDateString(new Date())
@@ -641,6 +707,10 @@ const JudicialSystem = () => {
                             className={`flex-1 py-3 rounded-lg font-bold flex items-center justify-center gap-2 transition-all text-sm ${activeTab === 'inbox' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}>
                             <Inbox className="w-4 h-4" /> 접수함 {pendingCount > 0 && <span className="bg-red-500 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center">{pendingCount}</span>}
                         </button>
+                        <button onClick={() => setActiveTab('laws')}
+                            className={`flex-1 py-3 rounded-lg font-bold flex items-center justify-center gap-2 transition-all text-sm ${activeTab === 'laws' ? 'bg-amber-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}>
+                            <ScrollText className="w-4 h-4" /> 63법전
+                        </button>
                         <button onClick={() => setActiveTab('stats')}
                             className={`flex-1 py-3 rounded-lg font-bold flex items-center justify-center gap-2 transition-all text-sm ${activeTab === 'stats' ? 'bg-emerald-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}>
                             <BarChart3 className="w-4 h-4" /> 통계
@@ -651,6 +721,10 @@ const JudicialSystem = () => {
                         <button onClick={() => setActiveTab('myrecords')}
                             className={`flex-1 py-3 rounded-lg font-bold flex items-center justify-center gap-2 transition-all text-sm ${activeTab === 'myrecords' ? 'bg-slate-800 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}>
                             <FileText className="w-4 h-4" /> 나의 기록
+                        </button>
+                        <button onClick={() => setActiveTab('laws')}
+                            className={`flex-1 py-3 rounded-lg font-bold flex items-center justify-center gap-2 transition-all text-sm ${activeTab === 'laws' ? 'bg-amber-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}>
+                            <ScrollText className="w-4 h-4" /> 63법전
                         </button>
                         <button onClick={() => { setActiveTab('submit'); setIsFormOpen(true); }}
                             className={`flex-1 py-3 rounded-lg font-bold flex items-center justify-center gap-2 transition-all text-sm ${activeTab === 'submit' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}>
@@ -948,6 +1022,88 @@ const JudicialSystem = () => {
             )}
 
             {/* ======================== */}
+            {/* 63법전 TAB */}
+            {/* ======================== */}
+            {activeTab === 'laws' && (
+                <div className="space-y-4">
+                    {/* Header & Add Button */}
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <ScrollText className="w-5 h-5 text-amber-600" />
+                            <h2 className="text-lg font-black text-gray-800">63법전</h2>
+                            <span className="text-xs text-gray-400 font-medium">총 {laws.length}개 조항</span>
+                        </div>
+                        {isAuthority && (
+                            <button
+                                onClick={() => openLawForm()}
+                                className="bg-amber-600 text-white px-4 py-2.5 rounded-xl font-bold hover:bg-amber-700 transition-all flex items-center gap-2 shadow-lg text-sm"
+                            >
+                                <Plus className="w-4 h-4" /> 법 추가
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Law Cards */}
+                    {laws.length > 0 ? (
+                        <div className="grid gap-4">
+                            {laws.map((law) => {
+                                const isWelfare = law.lawType === 'welfare';
+                                return (
+                                <div key={law.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all overflow-hidden">
+                                    <div className="p-5">
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div className="flex items-start gap-3 flex-1">
+                                                <div className={`w-12 h-12 rounded-xl text-white flex items-center justify-center font-black text-sm shadow-md shrink-0 ${isWelfare ? 'bg-gradient-to-br from-emerald-400 to-emerald-600' : 'bg-gradient-to-br from-amber-500 to-amber-700'}`}>
+                                                    제{law.order}조
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-2">
+                                                        <h3 className="font-bold text-gray-800 text-base">{law.name}</h3>
+                                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isWelfare ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                            {isWelfare ? '복지' : '처벌'}
+                                                        </span>
+                                                    </div>
+                                                    <div className="mt-2 space-y-2">
+                                                        <div className={`border rounded-xl p-3 ${isWelfare ? 'bg-emerald-50 border-emerald-100' : 'bg-amber-50 border-amber-100'}`}>
+                                                            <p className={`text-xs font-bold mb-1 flex items-center gap-1 ${isWelfare ? 'text-emerald-700' : 'text-amber-700'}`}><BookOpen className="w-3 h-3" /> 규칙 내용</p>
+                                                            <p className="text-gray-700 text-sm leading-relaxed whitespace-pre-wrap">{law.content}</p>
+                                                        </div>
+                                                        <div className={`border rounded-xl p-3 ${isWelfare ? 'bg-blue-50 border-blue-100' : 'bg-red-50 border-red-100'}`}>
+                                                            <p className={`text-xs font-bold mb-1 flex items-center gap-1 ${isWelfare ? 'text-blue-600' : 'text-red-600'}`}>
+                                                                {isWelfare ? <HeartHandshake className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
+                                                                {isWelfare ? '복지 혜택' : '위반시 처벌'}
+                                                            </p>
+                                                            <p className="text-gray-700 text-sm leading-relaxed whitespace-pre-wrap">{law.punishment}</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            {isAuthority && (
+                                                <div className="flex gap-1 shrink-0">
+                                                    <button onClick={() => openLawForm(law)} className="p-2 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors">
+                                                        <Edit3 className="w-4 h-4" />
+                                                    </button>
+                                                    <button onClick={() => handleDeleteLaw(law.id)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            )})}
+                        </div>
+                    ) : (
+                        <div className="text-center py-16 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                            <ScrollText className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                            <p className="text-gray-500 font-bold">등록된 법이 없습니다.</p>
+                            {isAuthority && <p className="text-gray-400 text-sm mt-1">위의 &apos;법 추가&apos; 버튼으로 새로운 법을 등록해보세요.</p>}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* ======================== */}
             {/* NEW INCIDENT FORM MODAL */}
             {/* ======================== */}
             {isFormOpen && (
@@ -1081,7 +1237,7 @@ const JudicialSystem = () => {
             {/* ======================== */}
             {isVerdictOpen && verdictTarget && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-                    <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-lg animate-in zoom-in-95 duration-200">
+                    <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-lg max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200">
                         <h2 className="text-xl font-black text-purple-800 mb-2 flex items-center gap-2">
                             <Gavel className="w-6 h-6" /> 판결문 작성
                         </h2>
@@ -1090,6 +1246,43 @@ const JudicialSystem = () => {
                         </p>
 
                         <div className="space-y-5">
+                            {/* 위반 법 선택 (63법전 연계) */}
+                            {laws.length > 0 && (
+                                <div>
+                                    <label className="block text-sm font-bold text-gray-600 mb-2 flex items-center gap-1">
+                                        <ScrollText className="w-4 h-4 text-amber-600" /> 위반 법 선택 (63법전)
+                                    </label>
+                                    <div className="max-h-40 overflow-y-auto border border-amber-200 rounded-xl p-2 bg-amber-50 space-y-1">
+                                        {laws.map(law => {
+                                            const isSelected = verdictData.selectedLawIds.includes(law.id);
+                                            return (
+                                                <button
+                                                    type="button"
+                                                    key={law.id}
+                                                    onClick={() => toggleVerdictLaw(law.id)}
+                                                    className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
+                                                        isSelected
+                                                            ? 'bg-amber-600 text-white shadow-sm'
+                                                            : 'bg-white text-gray-700 border border-gray-200 hover:border-amber-400'
+                                                    }`}
+                                                >
+                                                    <span className={`w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold shrink-0 ${
+                                                        isSelected ? 'bg-white/30' : 'bg-amber-100 text-amber-700'
+                                                    }`}>
+                                                        {isSelected ? '✓' : law.order}
+                                                    </span>
+                                                    <span className="truncate">제{law.order}조 {law.name}</span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                    {verdictData.selectedLawIds.length > 0 && (
+                                        <p className="text-xs text-amber-600 mt-1 font-medium">
+                                            {verdictData.selectedLawIds.length}개 법 선택됨 — 판결 내용이 자동 생성되었습니다.
+                                        </p>
+                                    )}
+                                </div>
+                            )}
                             <div>
                                 <label className="block text-sm font-bold text-gray-600 mb-2">판결 내용</label>
                                 <textarea
@@ -1176,6 +1369,71 @@ const JudicialSystem = () => {
                                 <button onClick={() => { setIsResolutionOpen(false); setResolutionTarget(null); }} className="py-3 rounded-xl font-bold border border-gray-200 text-gray-500 hover:bg-gray-50">취소</button>
                                 <button onClick={submitResolution} className="py-3 rounded-xl font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-md">
                                     {isAuthority ? '해결 완료' : '합의 제출'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ======================== */}
+            {/* LAW FORM MODAL */}
+            {/* ======================== */}
+            {isLawFormOpen && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+                    <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-lg animate-in zoom-in-95 duration-200">
+                        <h2 className="text-xl font-black text-amber-800 mb-6 flex items-center gap-2">
+                            <ScrollText className="w-6 h-6" /> {editingLaw ? '법 수정' : '새로운 법 추가'}
+                        </h2>
+
+                        <div className="space-y-5">
+                            <div>
+                                <label className="block text-sm font-bold text-gray-600 mb-2">법 유형</label>
+                                <div className="flex gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setLawFormData({ ...lawFormData, lawType: 'punishment' })}
+                                        className={`flex-1 py-2 rounded-xl text-sm font-bold transition-all ${lawFormData.lawType === 'punishment' ? 'bg-amber-600 text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                                    >처벌 법</button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setLawFormData({ ...lawFormData, lawType: 'welfare' })}
+                                        className={`flex-1 py-2 rounded-xl text-sm font-bold transition-all ${lawFormData.lawType === 'welfare' ? 'bg-emerald-600 text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                                    >복지 법</button>
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-bold text-gray-600 mb-2">규칙 이름</label>
+                                <input
+                                    type="text"
+                                    placeholder={lawFormData.lawType === 'welfare' ? '예: 착한 어린이 상' : '예: 교실 내 폭력 금지'}
+                                    className="w-full p-3 rounded-xl border border-gray-200 outline-none focus:border-amber-500 transition-all font-medium"
+                                    value={lawFormData.name}
+                                    onChange={e => setLawFormData({ ...lawFormData, name: e.target.value })}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-bold text-gray-600 mb-2">규칙 내용</label>
+                                <textarea
+                                    placeholder={lawFormData.lawType === 'welfare' ? '어떤 행동을 했을 때 복지를 받는지 적어주세요.' : '규칙의 구체적인 내용을 적어주세요.'}
+                                    className="w-full p-3 rounded-xl border border-gray-200 outline-none focus:border-amber-500 h-28 resize-none transition-all"
+                                    value={lawFormData.content}
+                                    onChange={e => setLawFormData({ ...lawFormData, content: e.target.value })}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-bold text-gray-600 mb-2">{lawFormData.lawType === 'welfare' ? '복지 혜택' : '위반시 처벌'}</label>
+                                <textarea
+                                    placeholder={lawFormData.lawType === 'welfare' ? '예: 추가 상점 5점' : '예: 벌점 5점 + 사과문 작성'}
+                                    className="w-full p-3 rounded-xl border border-gray-200 outline-none focus:border-amber-500 h-20 resize-none transition-all"
+                                    value={lawFormData.punishment}
+                                    onChange={e => setLawFormData({ ...lawFormData, punishment: e.target.value })}
+                                />
+                            </div>
+                            <div className="grid grid-cols-2 gap-3 pt-2">
+                                <button onClick={closeLawForm} className="py-3 rounded-xl font-bold border border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors">취소</button>
+                                <button onClick={handleLawSubmit} className="py-3 rounded-xl font-bold text-white bg-amber-600 hover:bg-amber-700 shadow-md transition-all">
+                                    {editingLaw ? '수정 완료' : '추가하기'}
                                 </button>
                             </div>
                         </div>

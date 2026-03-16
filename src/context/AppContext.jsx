@@ -34,6 +34,7 @@ export const AppProvider = ({ children }) => {
   const [classBudget, setClassBudget] = useState(0);
   const [budgetTransactions, setBudgetTransactions] = useState([]);
   const [marketPosts, setMarketPosts] = useState([]);
+  const [laws, setLaws] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
   const [originalAdminId, setOriginalAdminId] = useState(null);
   const [currentTimetable, setCurrentTimetable] = useState({ periods: Array(6).fill('') });
@@ -168,6 +169,14 @@ export const AppProvider = ({ children }) => {
         }
     );
 
+    // Listen to Laws (63법전)
+    const unsubLaws = onSnapshot(
+        query(collection(db, 'laws'), orderBy('order', 'asc')),
+        (snapshot) => {
+            setLaws(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+        }
+    );
+
     // Daily and Weekly task reset
     const checkAndResetTasks = async () => {
         const now = new Date();
@@ -255,6 +264,7 @@ export const AppProvider = ({ children }) => {
       unsubClassBudget();
       unsubBudgetTransactions();
       unsubMarketPosts();
+      unsubLaws();
     };
   }, []);
 
@@ -631,6 +641,27 @@ export const AppProvider = ({ children }) => {
       }
   };
 
+  // Laws (63법전) Actions
+  const addLaw = async (data) => {
+      const currentLaws = laws.length;
+      await addDoc(collection(db, 'laws'), {
+          ...data,
+          order: currentLaws + 1,
+          createdAt: new Date().toISOString(),
+          createdBy: currentUser?.id,
+          createdByName: currentUser?.name
+      });
+  };
+  const updateLaw = async (id, data) => {
+      await updateDoc(doc(db, 'laws', id), {
+          ...data,
+          updatedAt: new Date().toISOString()
+      });
+  };
+  const deleteLaw = async (id) => {
+      await deleteDoc(doc(db, 'laws', id));
+  };
+
   // Helper: compute score summary for a user
   const getUserScoreSummary = (userId) => {
       const userTxns = scoreTransactions.filter(t => t.userId === userId);
@@ -690,7 +721,7 @@ export const AppProvider = ({ children }) => {
 
   return (
     <AppContext.Provider value={{
-      users, roles, ministries, tasks, wikiEntries, incidents, teacherMessages,
+      users, roles, ministries, tasks, wikiEntries, incidents, teacherMessages, laws,
       scoreTransactions, scoreShop, fineRecords, classBudget, budgetTransactions, marketPosts,
       currentUser, originalAdminId,
       loading,
@@ -708,6 +739,7 @@ export const AppProvider = ({ children }) => {
       addFineRecord, updateFineRecordStatus,
       updateClassBudget, addBudgetTransaction, deleteBudgetTransaction,
       addMarketPost, updateMarketPostStatus, deleteMarketPost, joinMarketPost, leaveMarketPost,
+      addLaw, updateLaw, deleteLaw,
       getUserScoreSummary,
       syncRoles,
       currentTimetable, fetchTimetable, saveTimetable, fetchAllTimetables, subscribeToTimetable
