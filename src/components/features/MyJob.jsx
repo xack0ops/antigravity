@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../../context/AppContext';
 import { Info, Circle, CheckCircle2, Clock, X, BellRing, Send, Star, BookOpen, Wallet } from 'lucide-react';
 import ScoreManager from './ScoreManager';
@@ -6,13 +6,45 @@ import LifeNoteManager from './LifeNoteManager';
 import AssignmentManager from './AssignmentManager';
 import FineRecordManager from './FineRecordManager';
 import BudgetManager from './BudgetManager';
+import BoardGameManager from './BoardGameManager';
 
 const MyJob = ({ onNavigate }) => {
-    const { currentUser, tasks, roles, ministries, toggleTask, addTeacherMessage } = useAppContext();
+    const { currentUser, tasks, roles, ministries, toggleTask, addTeacherMessage, jobApplications, jobAppConfig, submitJobApplication } = useAppContext();
     const [showPopup, setShowPopup] = useState(false);
     const [showMessageModal, setShowMessageModal] = useState(false);
     const [messageText, setMessageText] = useState('');
     const [messageSending, setMessageSending] = useState(false);
+
+    // Job Application States
+    const myApplication = jobApplications?.find(a => a.userId === currentUser?.id);
+    const [showJobAppModal, setShowJobAppModal] = useState(false);
+    const [choice1, setChoice1] = useState('');
+    const [choice2, setChoice2] = useState('');
+    const [choice3, setChoice3] = useState('');
+    const [appReason, setAppReason] = useState('');
+
+    useEffect(() => {
+        if (myApplication && showJobAppModal) {
+            setChoice1(myApplication.choices[0] || '');
+            setChoice2(myApplication.choices[1] || '');
+            setChoice3(myApplication.choices[2] || '');
+            setAppReason(myApplication.reason || '');
+        } else if (!myApplication && showJobAppModal) {
+            setChoice1(''); setChoice2(''); setChoice3(''); setAppReason('');
+        }
+    }, [myApplication, showJobAppModal]);
+
+    const handleJobAppSubmit = async () => {
+        if (!choice1 || !choice2 || !choice3) return;
+        await submitJobApplication({
+            userId: currentUser.id,
+            userName: currentUser.name,
+            choices: [choice1, choice2, choice3],
+            reason: appReason
+        });
+        alert('업무희망서 제출이 완료되었습니다!');
+        setShowJobAppModal(false);
+    };
 
     if (!currentUser) return null;
 
@@ -36,11 +68,17 @@ const MyJob = ({ onNavigate }) => {
         currentUser.type === 'admin' ||
         myMinistry?.name === '기획재정부';
 
+    // 보드게임 관리 권한: 문화체육부원 or 관리자
+    const canManageBoardGames =
+        currentUser.type === 'admin' ||
+        myMinistry?.name === '문화체육부';
+
     const [showScoreManager, setShowScoreManager] = useState(false);
     const [showLifeNote, setShowLifeNote] = useState(false);
     const [showAssignment, setShowAssignment] = useState(false);
     const [showFineRecords, setShowFineRecords] = useState(false);
     const [showBudgetManager, setShowBudgetManager] = useState(false);
+    const [showBoardGameManager, setShowBoardGameManager] = useState(false);
     
     const myTasks = tasks.filter(t => {
         if (!currentUser.roleIds?.includes(t.roleId)) return false;
@@ -80,6 +118,30 @@ const MyJob = ({ onNavigate }) => {
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            {/* Job Application Banner */}
+            {jobAppConfig?.active && currentUser.type === 'student' && (
+                <div className={`p-4 rounded-xl border-l-4 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4 ${myApplication ? 'bg-green-50 border-green-500' : 'bg-indigo-50 border-indigo-500'}`}>
+                    <div className="text-center md:text-left">
+                        <h3 className={`font-bold ${myApplication ? 'text-green-800' : 'text-indigo-800'} mb-1`}>
+                            {myApplication ? '✅ 업무희망서 제출 완료' : `📝 ${jobAppConfig.title || '업무희망서'} 제출 기간입니다!`}
+                        </h3>
+                        <p className={`text-sm ${myApplication ? 'text-green-600' : 'text-indigo-600'}`}>
+                            {myApplication ? '선생님께서 희망서를 확인하고 부서를 배정해주실 예정입니다.' : '원하는 부서를 1지망부터 3지망까지 선택해주세요!'}
+                        </p>
+                    </div>
+                    <button 
+                        onClick={() => setShowJobAppModal(true)}
+                        className={`px-5 py-2.5 rounded-xl font-bold text-sm text-white shadow-sm shrink-0 transition-colors w-full md:w-auto ${
+                            myApplication 
+                            ? 'bg-green-600 hover:bg-green-700' 
+                            : 'bg-indigo-600 hover:bg-indigo-700 animate-pulse hover:animate-none'
+                        }`}
+                    >
+                        {myApplication ? '제출 내역 보기 및 수정' : '희망서 작성하기'}
+                    </button>
+                </div>
+            )}
+
             {/* Role Card */}
             <div className={`rounded-2xl p-6 md:p-8 border ${roleColor} relative overflow-hidden transition-all shadow-sm bg-white`}>
                 <div className="absolute top-0 right-0 p-4 opacity-10">
@@ -286,6 +348,30 @@ const MyJob = ({ onNavigate }) => {
                 </div>
             )}
 
+            {/* 보드게임 관리 카드 (문화체육부 전용) */}
+            {canManageBoardGames && (
+                <div className="bg-purple-50/50 rounded-2xl border border-purple-200 overflow-hidden">
+                    <button
+                        onClick={() => setShowBoardGameManager(v => !v)}
+                        className="w-full flex items-center gap-3 px-6 py-4 hover:bg-purple-100/50 transition-colors"
+                    >
+                        <div className="w-10 h-10 bg-purple-600 rounded-xl flex items-center justify-center shrink-0">
+                            <Star className="w-5 h-5 text-white" />
+                        </div>
+                        <div className="flex-1 text-left">
+                            <p className="font-bold text-purple-900">보드게임 대여 장부</p>
+                            <p className="text-xs text-purple-700 font-medium">우리 반 보드게임 목록과 현재 대여 현황을 관리하세요</p>
+                        </div>
+                        <span className="text-purple-500 font-bold text-lg">{showBoardGameManager ? '▲' : '▼'}</span>
+                    </button>
+                    {showBoardGameManager && (
+                        <div className="px-4 pb-5 pt-2">
+                            <BoardGameManager />
+                        </div>
+                    )}
+                </div>
+            )}
+
             {showMessageModal && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-[60] animate-in fade-in duration-200">
                     <div className="bg-white rounded-3xl p-8 max-w-md w-full relative shadow-2xl">
@@ -368,6 +454,68 @@ const MyJob = ({ onNavigate }) => {
                             className="w-full py-3.5 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-colors shadow-lg"
                         >
                             확인했습니다!
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Job Application Modal */}
+            {showJobAppModal && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-[60] animate-in fade-in duration-200">
+                    <div className="bg-white rounded-3xl p-6 max-w-sm md:max-w-md w-full relative shadow-2xl overflow-y-auto max-h-[90vh]">
+                        <button onClick={() => setShowJobAppModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+                            <X size={24} />
+                        </button>
+                        <h2 className="text-xl font-bold text-gray-800 mb-2">업무희망서 작성</h2>
+                        <p className="text-sm text-gray-500 mb-6">가장 일해보고 싶은 부서를 1지망부터 3지망까지 선택해주세요. (중복 선택 불가)</p>
+
+                        <div className="space-y-4 mb-6">
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-1">1지망 부서 <span className="text-red-500">*</span></label>
+                                <select 
+                                    value={choice1} onChange={e => setChoice1(e.target.value)}
+                                    className="w-full border border-gray-200 rounded-xl p-3 bg-gray-50 focus:bg-white focus:border-indigo-500 outline-none transition-colors"
+                                >
+                                    <option value="">선택해주세요</option>
+                                    {ministries.map(m => <option key={`c1-${m.id}`} value={m.id}>{m.name}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-1">2지망 부서 <span className="text-red-500">*</span></label>
+                                <select 
+                                    value={choice2} onChange={e => setChoice2(e.target.value)}
+                                    className="w-full border border-gray-200 rounded-xl p-3 bg-gray-50 focus:bg-white focus:border-indigo-500 outline-none transition-colors"
+                                >
+                                    <option value="">선택해주세요</option>
+                                    {ministries.map(m => <option key={`c2-${m.id}`} value={m.id} disabled={m.id === choice1}>{m.name}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-1">3지망 부서 <span className="text-red-500">*</span></label>
+                                <select 
+                                    value={choice3} onChange={e => setChoice3(e.target.value)}
+                                    className="w-full border border-gray-200 rounded-xl p-3 bg-gray-50 focus:bg-white focus:border-indigo-500 outline-none transition-colors"
+                                >
+                                    <option value="">선택해주세요</option>
+                                    {ministries.map(m => <option key={`c3-${m.id}`} value={m.id} disabled={m.id === choice1 || m.id === choice2}>{m.name}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-1">지원 이유 (선택사항)</label>
+                                <textarea 
+                                    value={appReason} onChange={e => setAppReason(e.target.value)}
+                                    placeholder="어떤 일을 해보고 싶나요?"
+                                    className="w-full border border-gray-200 rounded-xl p-3 bg-gray-50 focus:bg-white focus:border-indigo-500 outline-none resize-none h-24 text-sm transition-colors"
+                                />
+                            </div>
+                        </div>
+
+                        <button 
+                            onClick={handleJobAppSubmit}
+                            disabled={!choice1 || !choice2 || !choice3 || (choice1 === choice2 || choice2 === choice3 || choice1 === choice3)}
+                            className="w-full py-4 bg-indigo-600 text-white rounded-xl font-bold text-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
+                        >
+                            {myApplication ? '희망서 수정하기' : '희망서 제출하기'}
                         </button>
                     </div>
                 </div>

@@ -35,6 +35,11 @@ export const AppProvider = ({ children }) => {
   const [budgetTransactions, setBudgetTransactions] = useState([]);
   const [marketPosts, setMarketPosts] = useState([]);
   const [laws, setLaws] = useState([]);
+  const [studentNotices, setStudentNotices] = useState([]);
+  const [boardGames, setBoardGames] = useState([]);
+  const [boardGameRentals, setBoardGameRentals] = useState([]);
+  const [jobApplications, setJobApplications] = useState([]);
+  const [jobAppConfig, setJobAppConfig] = useState({ active: false, title: '' });
   const [currentUser, setCurrentUser] = useState(null);
   const [originalAdminId, setOriginalAdminId] = useState(null);
   const [currentTimetable, setCurrentTimetable] = useState({ periods: Array(6).fill('') });
@@ -185,6 +190,41 @@ export const AppProvider = ({ children }) => {
         }
     );
 
+    // Listen to Student Notices (admin → student messages)
+    const unsubStudentNotices = onSnapshot(
+        query(collection(db, 'student_notices'), orderBy('timestamp', 'desc')),
+        (snapshot) => {
+            setStudentNotices(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+        }
+    );
+
+    // Listen to Board Games
+    const unsubBoardGames = onSnapshot(collection(db, 'board_games'), (snapshot) => {
+        setBoardGames(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+
+    // Listen to Board Game Rentals
+    const unsubBoardGameRentals = onSnapshot(
+        query(collection(db, 'board_game_rentals'), orderBy('startTime', 'desc')),
+        (snapshot) => {
+            setBoardGameRentals(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+        }
+    );
+
+    // Listen to Job Applications
+    const unsubJobApps = onSnapshot(collection(db, 'job_applications'), (snapshot) => {
+        setJobApplications(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+
+    // Listen to Job App Config
+    const unsubJobAppConfig = onSnapshot(doc(db, 'settings', 'jobAppConfig'), (docSnap) => {
+        if (docSnap.exists()) {
+            setJobAppConfig(docSnap.data());
+        } else {
+            setJobAppConfig({ active: false, title: '' });
+        }
+    });
+
     // Daily and Weekly task reset
     const checkAndResetTasks = async () => {
         const now = new Date();
@@ -273,6 +313,11 @@ export const AppProvider = ({ children }) => {
       unsubBudgetTransactions();
       unsubMarketPosts();
       unsubLaws();
+      unsubStudentNotices();
+      unsubBoardGames();
+      unsubBoardGameRentals();
+      unsubJobApps();
+      unsubJobAppConfig();
     };
   }, []);
 
@@ -659,6 +704,173 @@ export const AppProvider = ({ children }) => {
       await deleteDoc(doc(db, 'laws', id));
   };
 
+  // Student Notices (admin → student direct messages)
+  const addStudentNotice = async ({ content, recipientIds }) => {
+      await addDoc(collection(db, 'student_notices'), {
+          content,
+          recipientIds,
+          readBy: [],
+          authorId: currentUser?.id,
+          authorName: currentUser?.name,
+          timestamp: new Date().toISOString(),
+      });
+  };
+  const deleteStudentNotice = async (id) => {
+      await deleteDoc(doc(db, 'student_notices', id));
+  };
+  const markNoticeRead = async (noticeId, userId) => {
+      const { arrayUnion } = await import('firebase/firestore');
+      await updateDoc(doc(db, 'student_notices', noticeId), {
+          readBy: arrayUnion(userId)
+      });
+  };
+
+  // Board Game Actions
+  const addBoardGame = async (name) => {
+      await addDoc(collection(db, 'board_games'), {
+          name,
+          status: 'available',
+          currentRentalId: null,
+          createdAt: new Date().toISOString()
+      });
+  };
+
+  const deleteBoardGame = async (id) => {
+      await deleteDoc(doc(db, 'board_games', id));
+  };
+
+  const rentBoardGame = async (gameId, gameName, participants) => {
+      // 1. Create rental record
+      const rentalRef = await addDoc(collection(db, 'board_game_rentals'), {
+          gameId,
+          gameName,
+          borrowerId: currentUser.id,
+          borrowerName: currentUser.name,
+          participants, // [{id, name}]
+          startTime: new Date().toISOString(),
+          endTime: null,
+          status: 'active'
+      });
+      // 2. Update board game status
+      await updateDoc(doc(db, 'board_games', gameId), {
+          status: 'rented',
+          currentRentalId: rentalRef.id
+      });
+  };
+
+  const returnBoardGame = async (gameId, rentalId) => {
+      // 1. Update rental record
+      await updateDoc(doc(db, 'board_game_rentals', rentalId), {
+          status: 'completed',
+          endTime: new Date().toISOString()
+      });
+      // 2. Update board game status
+      await updateDoc(doc(db, 'board_games', gameId), {
+          status: 'available',
+          currentRentalId: null
+      });
+  };
+
+  const deleteBoardGameRental = async (rentalId) => {
+      await deleteDoc(doc(db, 'board_game_rentals', rentalId));
+  };
+
+  // Job Application Actions
+  const submitJobApplication = async (data) => {
+      // data: { userId, userName, choices: [...], reason: '' }
+      const existing = jobApplications.find(a => a.userId === data.userId);
+      if (existing) {
+          await updateDoc(doc(db, 'job_applications', existing.id), {
+              ...data,
+              updatedAt: new Date().toISOString()
+          });
+      } else {
+          await addDoc(collection(db, 'job_applications'), {
+              ...data,
+              timestamp: new Date().toISOString()
+          });
+      }
+  };
+
+  const deleteJobApplication = async (id) => {
+      await deleteDoc(doc(db, 'job_applications', id));
+  };
+
+  const toggleJobAppPeriod = async (active, title) => {
+      await setDoc(doc(db, 'settings', 'jobAppConfig'), {
+          active,
+          title,
+          updatedAt: new Date().toISOString()
+      }, { merge: true });
+
+      // 기간 시작 시 학생들에게 알림 발송
+      if (active) {
+          const studentIds = users.filter(u => u.type === 'student').map(u => u.id);
+          if (studentIds.length > 0) {
+              await addDoc(collection(db, 'student_notices'), {
+                  content: `📢 [업무희망서] '${title}' 제출이 시작되었습니다. 업무 탭에서 지망을 선택해주세요!`,
+                  recipientIds: studentIds,
+                  readBy: [],
+                  authorId: currentUser?.id,
+                  authorName: currentUser?.name || '관리자',
+                  timestamp: new Date().toISOString(),
+              });
+          }
+      }
+  };
+
+  const clearJobApplications = async () => {
+      const batch = writeBatch(db);
+      jobApplications.forEach(app => {
+          batch.delete(doc(db, 'job_applications', app.id));
+      });
+      await batch.commit();
+  };
+
+  const saveCurrentMinistriesToHistory = async () => {
+      const studentsInMinistry = users.filter(u => u.type === 'student' && u.ministryId);
+      if (studentsInMinistry.length === 0) {
+          alert('현재 부서가 배정된 학생이 없습니다.');
+          return;
+      }
+      
+      const now = new Date();
+      const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`; // e.g. "2026-03"
+
+      if (!window.confirm(`현재 부서가 배정된 학생 ${studentsInMinistry.length}명의 소속 정보를 '과거 부서 이력(${dateStr})'에 저장하시겠습니까?\n(이 작업 후에도 현재 배정된 부서는 그대로 유지됩니다)`)) return;
+
+      const batch = writeBatch(db);
+      let updateCount = 0;
+      studentsInMinistry.forEach(student => {
+          const past = student.pastMinistries || [];
+          // 동일한 부서와 동일한 날짜가 이미 있는지 확인
+          const exists = past.some(h => 
+            (typeof h === 'string' ? h === student.ministryId : h.ministryId === student.ministryId && h.date === dateStr)
+          );
+
+          if (!exists) {
+              const userRef = doc(db, 'users', student.id);
+              batch.update(userRef, {
+                  pastMinistries: [...past, { ministryId: student.ministryId, date: dateStr }]
+              });
+              updateCount++;
+          }
+      });
+      
+      if (updateCount > 0) {
+          await batch.commit();
+          alert(`${updateCount}명의 학생 기록이 성공적으로 저장되었습니다!`);
+      } else {
+          alert('저장할 새로운 기록이 없습니다 (이미 해당 월의 이력이 모든 학생에게 저장되어 있습니다).');
+      }
+  };
+
+  const updateUserPastMinistries = async (userId, pastMinistries) => {
+      await updateDoc(doc(db, 'users', userId), {
+          pastMinistries
+      });
+  };
+
   // Helper: compute score summary for a user
   const getUserScoreSummary = (userId) => {
       const userTxns = scoreTransactions.filter(t => t.userId === userId);
@@ -720,6 +932,7 @@ export const AppProvider = ({ children }) => {
     <AppContext.Provider value={{
       users, roles, ministries, tasks, wikiEntries, incidents, teacherMessages, laws,
       scoreTransactions, scoreShop, fineRecords, classBudget, budgetTransactions, marketPosts,
+      boardGames, boardGameRentals, jobApplications, jobAppConfig,
       currentUser, originalAdminId,
       loading,
       login, logout, impersonateUser, stopImpersonating,
@@ -737,6 +950,10 @@ export const AppProvider = ({ children }) => {
       updateClassBudget, addBudgetTransaction, deleteBudgetTransaction,
       addMarketPost, updateMarketPostStatus, deleteMarketPost, joinMarketPost, leaveMarketPost,
       addLaw, updateLaw, deleteLaw,
+      studentNotices, addStudentNotice, deleteStudentNotice, markNoticeRead,
+      addBoardGame, deleteBoardGame, rentBoardGame, returnBoardGame, deleteBoardGameRental,
+      submitJobApplication, deleteJobApplication, toggleJobAppPeriod, clearJobApplications, saveCurrentMinistriesToHistory,
+      updateUserPastMinistries,
       getUserScoreSummary,
       syncRoles,
       currentTimetable, fetchTimetable, saveTimetable, fetchAllTimetables, subscribeToTimetable

@@ -1,15 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../../context/AppContext';
-import { Plus, Edit2, Trash2, Building, Shield, ClipboardList, Info, ChevronDown, ChevronUp, BookOpen } from 'lucide-react';
-
+import { Plus, Edit2, Trash2, Building, Shield, ClipboardList, Info, ChevronDown, ChevronUp, BookOpen, Users, CheckCircle2 } from 'lucide-react';
 const JobManagement = () => {
   const { 
-    ministries, roles, tasks, 
+    users, ministries, roles, tasks, jobApplications, jobAppConfig,
+    toggleJobAppPeriod, assignStudentRoles, saveCurrentMinistriesToHistory, updateUserPastMinistries, clearJobApplications,
     addMinistry, updateMinistry, deleteMinistry, 
     addRole, updateRole, deleteRole, 
     adminAddTask, updateTask, deleteTask,
     syncRoles
   } = useAppContext();
+
+  const [activeTab, setActiveTab] = useState('organization'); // 'organization' | 'assignment' | 'history'
 
   const [selectedMinistryId, setSelectedMinistryId] = useState(null);
   const [selectedRoleId, setSelectedRoleId] = useState(null);
@@ -32,6 +34,7 @@ const JobManagement = () => {
   const [newTaskFreqType, setNewTaskFreqType] = useState('daily');
   const [newTaskFreqDays, setNewTaskFreqDays] = useState([]);
   const [newTaskAction, setNewTaskAction] = useState(''); // '' | 'open_petition' | 'open_judicial' | 'open_wiki'
+  const [sortOption, setSortOption] = useState('name'); // 'name' | 'choice1' | 'choice2' | 'choice3'
 
   const DAYS_OF_WEEK = [
     { value: 1, label: '월' },
@@ -153,6 +156,12 @@ const JobManagement = () => {
   const selectedMinistry = ministries.find(m => m.id === selectedMinistryId);
   const ministryRoles = roles.filter(r => r.ministryId === selectedMinistryId);
   const roleTasks = tasks.filter(t => t.roleId === selectedRoleId);
+  const students = users.filter(u => u.type === 'student');
+
+  const [titleInput, setTitleInput] = useState('');
+  useEffect(() => {
+     if (jobAppConfig?.title) setTitleInput(jobAppConfig.title);
+  }, [jobAppConfig?.title]);
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 w-full overflow-hidden">
@@ -180,7 +189,33 @@ const JobManagement = () => {
             </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-gray-100 min-h-[600px]">
+        {/* Tabs */}
+        <div className="flex px-6 pt-2 border-b border-gray-100 bg-white sticky top-0 z-10 overflow-x-auto no-scrollbar">
+            <button 
+                onClick={() => setActiveTab('organization')}
+                className={`flex items-center gap-2 px-6 py-4 text-sm font-bold transition-all relative whitespace-nowrap ${activeTab === 'organization' ? 'text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}
+            >
+                <Building className="w-4 h-4" /> 부서/역할 편성
+                {activeTab === 'organization' && <div className="absolute bottom-0 left-0 right-0 h-1 bg-indigo-600 rounded-t-full"></div>}
+            </button>
+            <button 
+                onClick={() => setActiveTab('assignment')}
+                className={`flex items-center gap-2 px-6 py-4 text-sm font-bold transition-all relative whitespace-nowrap ${activeTab === 'assignment' ? 'text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}
+            >
+                <ClipboardList className="w-4 h-4" /> 학생 부서 배정 (업무희망서)
+                {activeTab === 'assignment' && <div className="absolute bottom-0 left-0 right-0 h-1 bg-indigo-600 rounded-t-full"></div>}
+            </button>
+            <button 
+                onClick={() => setActiveTab('history')}
+                className={`flex items-center gap-2 px-6 py-4 text-sm font-bold transition-all relative whitespace-nowrap ${activeTab === 'history' ? 'text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}
+            >
+                <BookOpen className="w-4 h-4" /> 전체 부서 이력 관리
+                {activeTab === 'history' && <div className="absolute bottom-0 left-0 right-0 h-1 bg-indigo-600 rounded-t-full"></div>}
+            </button>
+        </div>
+
+        {activeTab === 'organization' && (
+            <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-gray-100 min-h-[600px]">
             {/* Column 1: Ministries */}
             <div className="flex flex-col bg-white">
                 <div className="p-4 border-b border-gray-50 flex items-center gap-2 bg-gray-50/50">
@@ -663,7 +698,305 @@ const JobManagement = () => {
                     )}
                 </div>
             </div>
-        </div>
+            </div>
+        )}
+
+        {activeTab === 'assignment' && (
+            <div className="flex flex-col p-4 sm:p-6 min-h-[600px] bg-gray-50/30 overflow-hidden">
+                {/* Period Control Panel */}
+                <div className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-200 shadow-sm mb-6 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    <div className="flex-1">
+                        <h3 className="font-bold text-gray-800 text-lg mb-1 flex items-center gap-2">
+                            <ClipboardList className="w-5 h-5 text-indigo-500" />
+                            희망서 제출 기간 설정
+                        </h3>
+                        <p className="text-gray-500 text-sm break-keep">제출 기간을 열면 학생들의 업무 탭 상단에 희망서 제출 버튼이 표시됩니다.</p>
+                    </div>
+                    <div className="flex flex-col sm:flex-row flex-wrap gap-2 sm:items-center bg-gray-50 p-3 rounded-xl border border-gray-100 w-full lg:w-auto">
+                        <div className="flex flex-1 sm:flex-none gap-2 items-center">
+                            <input 
+                                type="text" 
+                                value={titleInput} 
+                                onChange={e => setTitleInput(e.target.value)}
+                                placeholder="예: 4월 업무희망서"
+                                className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm outline-none font-medium min-w-[120px] w-full sm:w-[160px]"
+                                disabled={jobAppConfig?.active}
+                            />
+                            <button 
+                                onClick={() => toggleJobAppPeriod(!jobAppConfig?.active, titleInput || '이달의 직업 희망서')}
+                                className={`px-4 py-2 rounded-lg font-bold text-sm text-white transition-all shadow-sm shrink-0 whitespace-nowrap ${jobAppConfig?.active ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'}`}
+                            >
+                                {jobAppConfig?.active ? '제출 마감하기' : '제출 시작하기'}
+                            </button>
+                        </div>
+                        <button 
+                            onClick={() => saveCurrentMinistriesToHistory()}
+                            className="flex items-center justify-center gap-1.5 px-4 py-2 bg-gray-800 hover:bg-gray-900 text-white rounded-lg font-bold text-sm transition-all shadow-sm shrink-0 whitespace-nowrap w-full sm:w-auto mt-1 sm:mt-0"
+                            title="현재 모든 학생의 소속 부서를 '과거 부서 이력'에 저장합니다."
+                        >
+                            <BookOpen className="w-4 h-4" /> 기록 저장하기
+                        </button>
+                        <button 
+                            onClick={async () => {
+                                if (window.confirm("현재까지 제출된 데이터용 모든 업무희망서 내역을 초기화하시겠습니까?\n(테스트용 제출 내역을 모두 삭제합니다)")) {
+                                    await clearJobApplications();
+                                    alert("모든 제출 내역이 초기화되었습니다.");
+                                }
+                            }}
+                            className="flex items-center justify-center gap-1.5 px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg font-bold text-sm transition-all border border-red-200 shadow-sm shrink-0 whitespace-nowrap w-full sm:w-auto mt-1 sm:mt-0"
+                            title="모든 업무희망서 지원 내역을 삭제합니다."
+                        >
+                            <Trash2 className="w-4 h-4" /> 지원내역 초기화
+                        </button>
+                    </div>
+                </div>
+
+                {jobAppConfig?.active && (
+                    <div className="mb-6 p-4 bg-green-50 text-green-700 rounded-xl border border-green-200 flex items-center gap-2 font-bold text-sm shadow-sm">
+                        <CheckCircle2 className="w-5 h-5 text-green-500" /> 
+                        제출 기간이 열려 있습니다. 학생들이 지금 업무희망서를 제출할 수 있습니다!
+                    </div>
+                )}
+
+                {/* Assignment Summary Dashboard */}
+                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm mb-6 flex flex-wrap gap-2 items-center">
+                    <span className="text-sm font-bold text-gray-700 mr-2 flex items-center gap-1.5">
+                        <Users className="w-4 h-4 text-indigo-500" /> 부서 배정 현황:
+                    </span>
+                    {ministries.map(min => {
+                        const count = students.filter(s => s.ministryId === min.id).length;
+                        return (
+                            <div key={min.id} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-sm font-bold bg-white shadow-sm ${min.color} border-opacity-30`}>
+                                <span>{min.name}</span>
+                                <span className={`bg-opacity-10 px-1.5 py-0.5 rounded text-xs ${min.color}`}>{count}명</span>
+                            </div>
+                        );
+                    })}
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-sm font-bold text-gray-500 bg-gray-50 border-gray-200 shadow-sm">
+                        <span>미배정</span>
+                        <span className="bg-white border border-gray-100 px-1.5 py-0.5 rounded text-xs">{students.filter(s => !s.ministryId).length}명</span>
+                    </div>
+                </div>
+
+                {/* Student List */}
+                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex-1 flex flex-col">
+                    <div className="p-4 border-b border-gray-100 bg-gray-50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <h3 className="font-bold text-gray-700">학생 제출 내역 및 부서 배정 ({students.length}명)</h3>
+                        <div className="flex items-center gap-2">
+                            <span className="text-sm font-bold text-gray-500">정렬 기준:</span>
+                            <select 
+                                value={sortOption} 
+                                onChange={(e) => setSortOption(e.target.value)}
+                                className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm bg-white font-medium text-gray-700 outline-none hover:border-indigo-300 shadow-sm"
+                            >
+                                <option value="name">이름순</option>
+                                <option value="choice1">1지망 같은 부서 모아보기</option>
+                                <option value="choice2">2지망 같은 부서 모아보기</option>
+                                <option value="choice3">3지망 같은 부서 모아보기</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div className="overflow-x-auto pb-4">
+                        <table className="w-full text-left min-w-[1000px]">
+                            <thead className="bg-gray-50/50 border-b border-gray-100">
+                                <tr>
+                                    <th className="p-4 text-sm font-bold text-gray-500 whitespace-nowrap w-[100px]">이름</th>
+                                    <th className="p-4 text-sm font-bold text-gray-500 whitespace-nowrap w-[120px]">현재 부서</th>
+                                    <th className="p-4 text-sm font-bold text-gray-500 whitespace-nowrap w-[180px]">과거 경험 부서</th>
+                                    <th className={`p-4 text-sm font-bold whitespace-nowrap w-[100px] ${sortOption === 'choice1' ? 'text-indigo-600 bg-indigo-50/50' : 'text-gray-500'}`}>1지망</th>
+                                    <th className={`p-4 text-sm font-bold whitespace-nowrap w-[100px] ${sortOption === 'choice2' ? 'text-indigo-600 bg-indigo-50/50' : 'text-gray-500'}`}>2지망</th>
+                                    <th className={`p-4 text-sm font-bold whitespace-nowrap w-[100px] ${sortOption === 'choice3' ? 'text-indigo-600 bg-indigo-50/50' : 'text-gray-500'}`}>3지망</th>
+                                    <th className="p-4 text-sm font-bold text-gray-500 whitespace-nowrap min-w-[200px]">지원 이유</th>
+                                    <th className="p-4 text-sm font-bold text-gray-500 whitespace-nowrap w-[160px]">부서 즉시 배정</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {[...students].sort((a, b) => {
+                                    if (sortOption === 'name') return a.name.localeCompare(b.name);
+                                    
+                                    const appA = jobApplications.find(app => app.userId === a.id);
+                                    const appB = jobApplications.find(app => app.userId === b.id);
+                                    
+                                    const getMinName = (app) => {
+                                        const idx = sortOption === 'choice1' ? 0 : sortOption === 'choice2' ? 1 : 2;
+                                        const cId = app?.choices?.[idx];
+                                        if (!cId) return 'ZZZZ'; // 밑으로 보내기
+                                        const min = ministries.find(m => m.id === cId);
+                                        return min ? min.name : 'ZZZZ';
+                                    };
+                                    
+                                    const nameA = getMinName(appA);
+                                    const nameB = getMinName(appB);
+                                    
+                                    if (nameA === nameB) return a.name.localeCompare(b.name);
+                                    return nameA.localeCompare(nameB);
+                                }).map(student => {
+                                    const app = jobApplications.find(a => a.userId === student.id);
+                                    const currentMin = ministries.find(m => m.id === student.ministryId);
+                                    const min1 = app ? ministries.find(m => m.id === app.choices[0]) : null;
+                                    const min2 = app ? ministries.find(m => m.id === app.choices[1]) : null;
+                                    const min3 = app ? ministries.find(m => m.id === app.choices[2]) : null;
+
+                                    return (
+                                        <tr key={student.id} className="hover:bg-gray-50/50 transition-colors">
+                                            <td className="p-4 font-bold text-gray-800 whitespace-nowrap">{student.name}</td>
+                                            <td className="p-4 whitespace-nowrap">
+                                                {currentMin ? (
+                                                    <span className={`text-[11px] font-bold px-2 py-1 rounded-full border ${currentMin.color}`}>{currentMin.name}</span>
+                                                ) : (
+                                                    <span className="text-[11px] font-medium text-gray-400 bg-gray-100 px-2 py-1 rounded-full">미배정</span>
+                                                )}
+                                            </td>
+                                            <td className="p-4">
+                                                <div className="flex flex-col gap-1 min-w-[140px]">
+                                                    {student.pastMinistries && student.pastMinistries.length > 0 ? (
+                                                        [...student.pastMinistries].slice(-2).map((h, idx) => {
+                                                            const isObj = typeof h === 'object';
+                                                            const pastId = isObj ? h.ministryId : h;
+                                                            const date = isObj ? h.date : '';
+                                                            const pastMin = ministries.find(m => m.id === pastId);
+                                                            return pastMin ? (
+                                                                <div key={idx} className="flex flex-col mb-1 last:mb-0">
+                                                                    <span className="text-[10px] bg-gray-50 text-gray-600 px-1.5 py-0.5 rounded border border-gray-200 truncate whitespace-nowrap inline-block w-fit" title={`${pastMin.name} ${date}`}>
+                                                                        {pastMin.name}
+                                                                    </span>
+                                                                    {date && <span className="text-[8px] text-gray-400 ml-1 font-medium">{date}</span>}
+                                                                </div>
+                                                            ) : null;
+                                                        })
+                                                    ) : (
+                                                        <span className="text-[10px] text-gray-300">-</span>
+                                                    )}
+                                                    {student.pastMinistries?.length > 2 && (
+                                                        <span className="text-[9px] text-gray-400 font-medium">+{student.pastMinistries.length - 2}개 더보기 (이력관리 탭)</span>
+                                                    )}
+                                                </div>
+                                            </td>
+                                            <td className="p-4 bg-indigo-50/30 whitespace-nowrap">
+                                                {min1 ? <span className={`text-[11px] font-bold px-2 py-1 rounded-full border ${min1.color}`}>{min1.name}</span> : <span className="text-gray-300">-</span>}
+                                            </td>
+                                            <td className="p-4 whitespace-nowrap">
+                                                {min2 ? <span className={`text-[11px] font-bold px-2 py-1 rounded-full border ${min2.color}`}>{min2.name}</span> : <span className="text-gray-300">-</span>}
+                                            </td>
+                                            <td className="p-4 whitespace-nowrap">
+                                                {min3 ? <span className={`text-[11px] font-bold px-2 py-1 rounded-full border ${min3.color}`}>{min3.name}</span> : <span className="text-gray-300">-</span>}
+                                            </td>
+                                            <td className="p-4 text-xs text-gray-500 max-w-[200px] align-middle break-keep">
+                                                {app?.reason ? (
+                                                    <div className="rounded bg-gray-50 p-1.5 border border-gray-100 line-clamp-3 overflow-hidden" title={app.reason}>{app.reason}</div>
+                                                ) : <span className="text-gray-300">-</span>}
+                                            </td>
+                                            <td className="p-4">
+                                                <select 
+                                                    value={student.ministryId || ''}
+                                                    onChange={(e) => {
+                                                        const newMinId = e.target.value;
+                                                        if (newMinId) {
+                                                            const alreadyHad = student.pastMinistries?.some(h => 
+                                                                typeof h === 'string' ? h === newMinId : (h?.ministryId === newMinId)
+                                                            );
+                                                            if (alreadyHad) {
+                                                                if (!window.confirm("이 학생은 이전에 해당 부서에서 활동한 적이 있습니다.\n정말 이 부서로 배정하시겠습니까?")) {
+                                                                    e.target.value = student.ministryId || '';
+                                                                    return;
+                                                                }
+                                                            }
+                                                        }
+                                                        const roles = newMinId === student.ministryId ? student.roleIds : [];
+                                                        assignStudentRoles(student.id, newMinId || null, roles);
+                                                    }}
+                                                    className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm bg-white cursor-pointer hover:border-indigo-300 outline-none font-bold text-gray-700 min-w-[140px]"
+                                                >
+                                                    <option value="">--부서 선택--</option>
+                                                    {ministries.map(m => (
+                                                        <option key={m.id} value={m.id}>{m.name}</option>
+                                                    ))}
+                                                </select>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {activeTab === 'history' && (
+            <div className="flex flex-col p-4 sm:p-6 min-h-[600px] bg-gray-50/30 overflow-hidden">
+                <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                        <h3 className="font-bold text-gray-800 text-lg mb-1 flex items-center gap-2">
+                            <BookOpen className="w-5 h-5 text-indigo-500" />
+                            전체 부서 이력 관리
+                        </h3>
+                        <p className="text-gray-500 text-sm break-keep">모든 학생의 활동 이력을 한눈에 확인하고 편집할 수 있습니다.</p>
+                    </div>
+                </div>
+
+                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex-1 flex flex-col">
+                    <div className="p-4 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
+                        <h3 className="font-bold text-gray-700">학생별 전체 이력 목록 ({students.length}명)</h3>
+                        <div className="text-xs text-gray-400 font-medium">* 최근 저장된 순서로 표시됩니다.</div>
+                    </div>
+                    <div className="overflow-x-auto custom-scrollbar">
+                        <table className="w-full text-left min-w-[800px]">
+                            <thead className="bg-gray-50/50 border-b border-gray-100">
+                                <tr>
+                                    <th className="p-4 text-sm font-bold text-gray-500 whitespace-nowrap w-[150px]">학생 이름</th>
+                                    <th className="p-4 text-sm font-bold text-gray-500">전체 활동 이력 (날짜포함)</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {[...students].sort((a,b) => a.name.localeCompare(b.name)).map(student => (
+                                    <tr key={student.id} className="hover:bg-gray-50/50 transition-colors">
+                                        <td className="p-4 font-bold text-gray-800 align-top whitespace-nowrap border-r border-gray-50">
+                                            {student.name}
+                                        </td>
+                                        <td className="p-4">
+                                            <div className="flex flex-wrap gap-2">
+                                                {student.pastMinistries && student.pastMinistries.length > 0 ? (
+                                                    [...student.pastMinistries].map((h, hIdx) => {
+                                                        const isObj = typeof h === 'object';
+                                                        const pastId = isObj ? h.ministryId : h;
+                                                        const date = isObj ? h.date : '날짜미상';
+                                                        const pastMin = ministries.find(m => m.id === pastId);
+                                                        
+                                                        return (
+                                                            <div key={hIdx} className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-xl group hover:border-indigo-300 transition-all shadow-sm">
+                                                                <div className="flex flex-col">
+                                                                    <span className="text-xs font-bold text-gray-700">{pastMin?.name || '부서없음'}</span>
+                                                                    <span className="text-[9px] text-gray-400 font-medium">{date}</span>
+                                                                </div>
+                                                                <button 
+                                                                    onClick={async () => {
+                                                                        if (window.confirm(`${student.name} 학생의 ${date} ${pastMin?.name} 기록을 정말 삭제하시겠습니까?`)) {
+                                                                            const newPast = student.pastMinistries.filter((_, i) => i !== hIdx);
+                                                                            await updateUserPastMinistries(student.id, newPast);
+                                                                        }
+                                                                    }}
+                                                                    className="p-1 text-red-400 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                                                                    title="이력 삭제"
+                                                                >
+                                                                    <Trash2 className="w-4 h-4" />
+                                                                </button>
+                                                            </div>
+                                                        );
+                                                    })
+                                                ) : (
+                                                    <span className="text-sm text-gray-300 italic py-2 inline-block">저장된 경력이 없습니다.</span>
+                                                )}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        )}
     </div>
   );
 };

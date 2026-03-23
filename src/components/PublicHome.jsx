@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { Calendar, ClipboardList, Home, Gavel, ScrollText, Search, Briefcase, LogOut, KeyRound, X, Star, ShoppingBag, History, AlertCircle } from 'lucide-react';
+import { Calendar, ClipboardList, Home, Gavel, ScrollText, Search, Briefcase, LogOut, KeyRound, X, Star, ShoppingBag, History, AlertCircle, BellRing, BookOpen } from 'lucide-react';
 import { getLocalDateString } from '../utils/dateUtils';
 import { subscribeToCollection } from '../utils/firebaseUtils';
 import StateCouncil from './features/StateCouncil';
@@ -8,9 +8,10 @@ import JudicialSystem from './features/JudicialSystem';
 import ClassWiki from './features/ClassWiki';
 import MyJob from './features/MyJob';
 import FleaMarket from './features/FleaMarket';
+import UserManual from './features/UserManual';
 
 const PublicHome = () => {
-  const { subscribeToTimetable, currentUser, logout, updatePassword, scoreShop, getUserScoreSummary, addScoreTransaction, originalAdminId, stopImpersonating } = useAppContext();
+  const { subscribeToTimetable, currentUser, logout, updatePassword, scoreShop, getUserScoreSummary, addScoreTransaction, originalAdminId, stopImpersonating, studentNotices, markNoticeRead } = useAppContext();
   const [timetable, setTimetable] = useState({ periods: Array(6).fill('') });
   const [activeTab, setActiveTab] = useState('home');
   const [subTab, setSubTab] = useState(null);
@@ -19,6 +20,7 @@ const PublicHome = () => {
   // Notifications State
   const [activeSurveys, setActiveSurveys] = useState([]);
   const [activeAssignments, setActiveAssignments] = useState([]);
+  const [activePetitions, setActivePetitions] = useState([]);
 
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [pwCurrent, setPwCurrent] = useState('');
@@ -26,6 +28,7 @@ const PublicHome = () => {
   const [pwConfirm, setPwConfirm] = useState('');
   const [pwError, setPwError] = useState('');
   const [pwSuccess, setPwSuccess] = useState(false);
+  const [showUserManual, setShowUserManual] = useState(false);
 
   const openPasswordModal = () => {
     setShowPasswordModal(true);
@@ -83,15 +86,18 @@ const PublicHome = () => {
   useEffect(() => {
     let unsubSurveys = () => {};
     let unsubAssignments = () => {};
+    let unsubPetitions = () => {};
 
     if (activeTab === 'home' && currentUser) {
       unsubSurveys = subscribeToCollection('surveys', setActiveSurveys);
       unsubAssignments = subscribeToCollection('assignments', setActiveAssignments);
+      unsubPetitions = subscribeToCollection('petitions', setActivePetitions);
     }
     
     return () => {
         unsubSurveys();
         unsubAssignments();
+        unsubPetitions();
     }
   }, [activeTab, currentUser]);
 
@@ -103,6 +109,20 @@ const PublicHome = () => {
     { id: 'petition',label: '국무회의',     icon: <ScrollText className="w-6 h-6"/> },
     { id: 'judicial',label: '재판소',       icon: <Gavel    className="w-6 h-6"/> },
   ];
+
+  // 청원 마지막 확인 시각 helpers (localStorage 사용)
+  const getPetitionLastChecked = (userId) => {
+    const val = localStorage.getItem(`petitionLastChecked_${userId}`);
+    return val ? new Date(val) : null;
+  };
+  const savePetitionLastChecked = (userId) => {
+    localStorage.setItem(`petitionLastChecked_${userId}`, new Date().toISOString());
+  };
+  const navigateToPetition = (tab = 'petition') => {
+    if (currentUser) savePetitionLastChecked(currentUser.id);
+    setActiveTab('petition');
+    setSubTab(tab);
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
@@ -143,6 +163,13 @@ const PublicHome = () => {
                   title="비밀번호 변경"
                 >
                   <KeyRound className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setShowUserManual(true)}
+                  className="p-2 bg-white rounded-full text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors shadow-sm"
+                  title="63랜드 설명서"
+                >
+                  <BookOpen className="w-4 h-4" />
                 </button>
                 <button
                   onClick={logout}
@@ -249,8 +276,19 @@ const PublicHome = () => {
                     const unvotedSurveys = activeSurveys.filter(survey =>
                       !survey.votedUsers?.includes(currentUser?.id)
                     );
+                    const newPetitions = activePetitions.filter(petition => {
+                      if (petition.agreedUsers?.includes(currentUser?.id)) return false;
+                      if (petition.agreeCount >= 10) return false;
+                      const lastChecked = currentUser ? getPetitionLastChecked(currentUser.id) : null;
+                      if (!lastChecked) return true;
+                      const created = petition.createdAt?.toDate ? petition.createdAt.toDate() : (petition.createdAt ? new Date(petition.createdAt) : null);
+                      return created ? created > lastChecked : false;
+                    });
+                    const unreadNotices = (studentNotices || []).filter(n =>
+                      n.recipientIds?.includes(currentUser?.id) && !n.readBy?.includes(currentUser?.id)
+                    );
                     
-                    const hasNotifications = unsubmittedAssignments.length > 0 || unvotedSurveys.length > 0;
+                    const hasNotifications = unsubmittedAssignments.length > 0 || unvotedSurveys.length > 0 || newPetitions.length > 0 || unreadNotices.length > 0;
 
                     if (!hasNotifications) {
                       return (
@@ -312,12 +350,50 @@ const PublicHome = () => {
                             </div>
                           </div>
                         ))}
+
+                        {newPetitions.map(petition => (
+                          <div
+                            key={petition.id}
+                            onClick={() => navigateToPetition('petition')}
+                            className="bg-red-50 border border-red-100 p-4 rounded-2xl flex items-start gap-3 cursor-pointer hover:bg-red-100 transition-colors"
+                          >
+                            <div className="bg-red-200 text-red-700 p-2 rounded-xl shrink-0">
+                              <ScrollText className="w-5 h-5" />
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-xs font-bold text-red-600 bg-red-100/50 px-2 py-0.5 rounded-full">새 청원</span>
+                                <h4 className="font-bold text-gray-800 text-sm">{petition.title}</h4>
+                              </div>
+                              <p className="text-xs text-gray-500">새로운 청원이 올라왔어요! 클릭하여 [국무회의] 탭에서 확인하세요</p>
+                            </div>
+                          </div>
+                        ))}
+
+                        {unreadNotices.map(notice => (
+                          <div
+                            key={notice.id}
+                            onClick={() => markNoticeRead(notice.id, currentUser.id)}
+                            className="bg-purple-50 border border-purple-100 p-4 rounded-2xl flex items-start gap-3 cursor-pointer hover:bg-purple-100 transition-colors"
+                          >
+                            <div className="bg-purple-200 text-purple-700 p-2 rounded-xl shrink-0">
+                              <BellRing className="w-5 h-5" />
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-xs font-bold text-purple-600 bg-purple-100/50 px-2 py-0.5 rounded-full">📢 선생님 메시지</span>
+                              </div>
+                              <p className="text-sm font-bold text-gray-800 whitespace-pre-wrap">{notice.content}</p>
+                              <p className="text-xs text-gray-400 mt-1">클릭하시면 확인 처리됩니다</p>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     );
                   })()}
                 </div>
                 <div className="bg-gray-50 px-6 py-4 border-t border-gray-100 text-center text-xs text-gray-400 font-medium">
-                  학생 개별 역할은 '나의 업무' 탭에서 확인하세요
+                  학생 개별 역할은 &apos;나의 업무&apos; 탭에서 확인하세요
                 </div>
               </div>
             </div>
@@ -359,8 +435,12 @@ const PublicHome = () => {
             <button
               key={item.id}
               onClick={() => {
-                setActiveTab(item.id);
-                setSubTab(null);
+                if (item.id === 'petition') {
+                  navigateToPetition();
+                } else {
+                  setActiveTab(item.id);
+                  setSubTab(null);
+                }
               }}
               className={`
                 flex-1 flex flex-col items-center justify-center py-3 gap-1 transition-all select-none
@@ -578,6 +658,7 @@ const PublicHome = () => {
         </div>
       )}
 
+      {showUserManual && <UserManual onClose={() => setShowUserManual(false)} />}
     </div>
   );
 };

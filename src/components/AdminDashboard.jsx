@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { LogOut, CheckCircle2, KeyRound, UserPlus, Trash2, ChevronDown, ChevronUp, BookOpen, Wrench, Calendar, X, Scale, BellRing, Sheet, Loader2, ExternalLink, Shield, Star, Plus, Edit2 } from 'lucide-react';
+import { LogOut, CheckCircle2, KeyRound, UserPlus, Trash2, ChevronDown, ChevronUp, BookOpen, Wrench, Calendar, X, Scale, BellRing, Sheet, Loader2, ExternalLink, Shield, Star, Plus, Edit2, Gamepad2 } from 'lucide-react';
 import { db } from '../firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { GOOGLE_CLIENT_ID, GOOGLE_SHEETS_SCOPE } from '../googleConfig';
@@ -16,11 +16,14 @@ import AssignmentManager from './features/AssignmentManager';
 import FineRecordManager from './features/FineRecordManager';
 import ClassBudgetAdmin from './features/ClassBudgetAdmin';
 import StateCouncil from './features/StateCouncil';
+import AdminManual from './features/AdminManual';
+import BoardGameManager from './features/BoardGameManager';
 
 const AdminDashboard = () => {
-  const { users, roles, tasks, ministries, assignStudentRoles, verifyTask, updatePassword, addUser, deleteUser, logout, fetchAllTimetables, saveTimetable, teacherMessages, deleteTeacherMessage, currentUser, scoreTransactions, scoreShop, addScoreShopItem, updateScoreShopItem, deleteScoreShopItem, getUserScoreSummary, impersonateUser } = useAppContext();
+  const { users, roles, tasks, ministries, assignStudentRoles, verifyTask, updatePassword, addUser, deleteUser, logout, fetchAllTimetables, saveTimetable, teacherMessages, deleteTeacherMessage, currentUser, scoreTransactions, scoreShop, addScoreShopItem, updateScoreShopItem, deleteScoreShopItem, getUserScoreSummary, impersonateUser, studentNotices, addStudentNotice, deleteStudentNotice } = useAppContext();
   const [activeTab, setActiveTab] = useState('management'); // 'management', 'curriculum', 'tools', 'judicial', 'messages'
   const [activeTool, setActiveTool] = useState(null); // 'timetable', etc.
+  const [showAdminManual, setShowAdminManual] = useState(false);
   
   // Curriculum State
   const [timetables, setTimetables] = useState([]);
@@ -186,6 +189,14 @@ const AdminDashboard = () => {
                     내 수첩(비번) 변경
                 </button>
             )}
+            <button 
+                onClick={() => setShowAdminManual(true)}
+                className="flex items-center px-4 py-2 bg-indigo-50 text-indigo-700 rounded-lg shadow-sm hover:bg-indigo-100 border border-indigo-200 gap-2 font-bold text-sm transition-colors"
+                title="선생님 대시보드 설명서"
+            >
+                <BookOpen className="w-4 h-4" />
+                관리자 설명서
+            </button>
             <button 
             onClick={logout}
             className="flex items-center px-4 py-2 bg-white text-gray-700 rounded-lg shadow-sm hover:bg-gray-50 border border-gray-200 gap-2 font-bold text-sm"
@@ -628,6 +639,19 @@ const AdminDashboard = () => {
                             </button>
 
                             <button 
+                                onClick={() => setActiveTool('board_game_manager')}
+                                className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md hover:border-purple-200 transition-all flex flex-col items-center gap-4 group"
+                            >
+                                <div className="w-16 h-16 bg-purple-50 rounded-full flex items-center justify-center group-hover:bg-purple-600 transition-colors">
+                                    <Gamepad2 className="w-8 h-8 text-purple-600 group-hover:text-white transition-colors" />
+                                </div>
+                                <div className="text-center">
+                                    <h3 className="font-bold text-lg text-gray-800">보드게임 대여장부</h3>
+                                    <p className="text-gray-400 text-sm mt-1">문화체육부 관리</p>
+                                </div>
+                            </button>
+
+                            <button 
                                 onClick={() => setActiveTool('petition_board')}
                                 className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md hover:border-red-200 transition-all flex flex-col items-center gap-4 group"
                             >
@@ -651,6 +675,7 @@ const AdminDashboard = () => {
                                  {activeTool === 'fine_records' && <><BookOpen className="w-6 h-6 text-yellow-600"/> 벌금 기록지</>}
                                  {activeTool === 'class_budget' && <><BookOpen className="w-6 h-6 text-emerald-600"/> 학급 예산 설정</>}
                                  {activeTool === 'petition_board' && <><Scale className="w-6 h-6 text-red-600"/> 국무회의 관리 (청원 · 설문)</>}
+                                 {activeTool === 'board_game_manager' && <><Gamepad2 className="w-6 h-6 text-purple-600"/> 보드게임 대여 관리</>}
                                 </h3>
                                 <button 
                                     onClick={() => setActiveTool(null)}
@@ -709,6 +734,9 @@ const AdminDashboard = () => {
                              {activeTool === 'class_budget' && (
                                  <ClassBudgetAdmin />
                              )}
+                             {activeTool === 'board_game_manager' && (
+                                 <BoardGameManager />
+                             )}
                         </div>
                     )}
                 </div>
@@ -717,10 +745,19 @@ const AdminDashboard = () => {
                 <JudicialSystem />
             )}
             {activeTab === 'messages' && (
-                <MessagesInbox messages={teacherMessages} onDelete={deleteTeacherMessage} />
+                <div className="space-y-8">
+                    <AdminMessageComposer
+                        students={students}
+                        onSend={addStudentNotice}
+                        sentNotices={studentNotices}
+                        onDeleteNotice={deleteStudentNotice}
+                    />
+                    <MessagesInbox messages={teacherMessages} onDelete={deleteTeacherMessage} />
+                </div>
             )}
           </div>
         </div>
+        {showAdminManual && <AdminManual onClose={() => setShowAdminManual(false)} />}
     </div>
   );
 };
@@ -956,9 +993,157 @@ const CurriculumView = ({ stats, timetables, onRefresh }) => {
 };
 
 // =====================
+// ADMIN MESSAGE COMPOSER
+// =====================
+const AdminMessageComposer = ({ students, onSend, sentNotices, onDeleteNotice }) => {
+    const [selectedIds, setSelectedIds] = useState([]);
+    const [content, setContent] = useState('');
+    const [sending, setSending] = useState(false);
+    const [sent, setSent] = useState(false);
+
+    const toggleStudent = (id) => {
+        setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+    };
+    const toggleAll = () => {
+        setSelectedIds(selectedIds.length === students.length ? [] : students.map(s => s.id));
+    };
+
+    const handleSend = async () => {
+        if (!content.trim() || selectedIds.length === 0) return;
+        setSending(true);
+        await onSend({ content: content.trim(), recipientIds: selectedIds });
+        setContent('');
+        setSelectedIds([]);
+        setSending(false);
+        setSent(true);
+        setTimeout(() => setSent(false), 3000);
+    };
+
+    const myNotices = sentNotices; // show all sent by admin
+
+    return (
+        <div className="space-y-6">
+            {/* Compose Panel */}
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-purple-100">
+                <div className="flex items-center gap-3 mb-5">
+                    <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
+                        <BellRing className="w-5 h-5 text-purple-600" />
+                    </div>
+                    <div>
+                        <h2 className="text-xl font-bold text-gray-800">선생님 메시지 보내기</h2>
+                        <p className="text-sm text-gray-500">학생 알림장에 즉시 전달됩니다.</p>
+                    </div>
+                </div>
+
+                {/* Student selector */}
+                <div className="mb-4">
+                    <div className="flex items-center justify-between mb-2">
+                        <label className="text-sm font-bold text-gray-600">받는 학생 선택</label>
+                        <button onClick={toggleAll} className="text-xs text-purple-600 font-bold hover:underline">
+                            {selectedIds.length === students.length ? '전체 해제' : '전체 선택'}
+                        </button>
+                    </div>
+                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2 max-h-40 overflow-y-auto p-1">
+                        {students.map(s => (
+                            <label key={s.id}
+                                className={`flex items-center gap-1.5 px-2 py-1.5 rounded-xl border cursor-pointer text-xs font-bold transition-all select-none ${selectedIds.includes(s.id) ? 'bg-purple-100 border-purple-400 text-purple-800' : 'bg-gray-50 border-gray-200 text-gray-500 hover:border-purple-200'}`}
+                            >
+                                <input type="checkbox" className="sr-only" checked={selectedIds.includes(s.id)} onChange={() => toggleStudent(s.id)} />
+                                {s.name}
+                            </label>
+                        ))}
+                    </div>
+                    {selectedIds.length > 0 && (
+                        <p className="text-xs text-purple-600 font-bold mt-1.5">
+                            {selectedIds.length}명 선택됨
+                        </p>
+                    )}
+                </div>
+
+                {/* Message textarea */}
+                <textarea
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-purple-400 resize-none text-sm"
+                    rows={3}
+                    placeholder="학생들에게 전달할 메시지를 입력하세요..."
+                    value={content}
+                    onChange={e => setContent(e.target.value)}
+                />
+
+                <div className="flex items-center justify-between mt-3">
+                    {sent && <span className="text-green-600 text-sm font-bold">✅ 전송 완료!</span>}
+                    <div className="ml-auto">
+                        <button
+                            onClick={handleSend}
+                            disabled={sending || !content.trim() || selectedIds.length === 0}
+                            className="flex items-center gap-2 bg-purple-600 text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
+                        >
+                            <BellRing className="w-4 h-4" />
+                            {sending ? '전송 중...' : '메시지 전송'}
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {/* Sent History - always visible */}
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-base font-bold text-gray-700 flex items-center gap-2">
+                        <BellRing className="w-4 h-4 text-purple-400" /> 전송 내역
+                        {myNotices.length > 0 && <span className="bg-purple-100 text-purple-700 text-xs font-bold px-2 py-0.5 rounded-full">{myNotices.length}건</span>}
+                    </h3>
+                </div>
+                {myNotices.length === 0 ? (
+                    <div className="text-center py-10 text-gray-400">
+                        <BellRing className="w-10 h-10 mx-auto mb-2 opacity-20" />
+                        <p className="text-sm font-bold">전송된 메시지가 없습니다.</p>
+                    </div>
+                ) : (
+                    <div className="space-y-3">
+                        {myNotices.map(notice => {
+                            const recipientNames = notice.recipientIds?.map(id => students.find(s => s.id === id)?.name).filter(Boolean);
+                            const readCount = notice.readBy?.length || 0;
+                            const totalCount = notice.recipientIds?.length || 0;
+                            return (
+                                <div key={notice.id} className="bg-purple-50 border border-purple-100 rounded-xl p-4">
+                                    <p className="text-sm font-bold text-gray-800 whitespace-pre-wrap mb-3">{notice.content}</p>
+                                    <div className="flex flex-wrap gap-1 mb-3">
+                                        {recipientNames?.map((name, i) => {
+                                            const rid = notice.recipientIds?.[notice.recipientIds?.findIndex((id) => students.find(s => s.id === id)?.name === name)];
+                                            const isRead = notice.readBy?.includes(rid);
+                                            return (
+                                                <span key={name + i} className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${isRead ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500'}`}>
+                                                    {isRead ? '✓ ' : ''}{name}
+                                                </span>
+                                            );
+                                        })}
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <span className="text-xs text-gray-400">{new Date(notice.timestamp).toLocaleString('ko-KR')}</span>
+                                            <span className="text-xs font-bold text-purple-600">{readCount}/{totalCount}명 확인</span>
+                                        </div>
+                                        <button
+                                            onClick={() => { if (window.confirm(`"${notice.content.slice(0, 20)}..." 메시지를 취소(삭제)하시겠습니까?\n아직 확인하지 않은 학생 알림장에서도 사라집니다.`)) onDeleteNotice(notice.id); }}
+                                            className="flex items-center gap-1.5 text-xs font-bold text-red-400 hover:text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors border border-red-100 hover:border-red-300"
+                                        >
+                                            <Trash2 className="w-3.5 h-3.5" /> 전송 취소
+                                        </button>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
+// =====================
 // MESSAGES INBOX COMPONENT
 // =====================
 const MessagesInbox = ({ messages, onDelete }) => {
+
     const [isExporting, setIsExporting] = useState(false);
     const [exportedUrl, setExportedUrl] = useState(null);
     const tokenClientRef = useRef(null);

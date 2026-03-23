@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { INITIAL_DATA } from '../data/mockData';
-import { LogOut, Info, Circle, CheckCircle2, Clock, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Edit3, FolderDown, MessageCircleQuestion, X, BellRing, Send, Gavel, KeyRound } from 'lucide-react';
+import { LogOut, Info, Circle, CheckCircle2, Clock, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Edit3, FolderDown, MessageCircleQuestion, X, BellRing, Send, Gavel, KeyRound, BookOpen } from 'lucide-react';
 import { getLocalDateString } from '../utils/dateUtils';
 import TimetableEditor from './TimetableEditor';
 import JudicialSystem from './features/JudicialSystem';
+import UserManual from './features/UserManual';
 
 const StudentDashboard = () => {
   const { currentUser, tasks, roles, ministries, toggleTask, logout, currentTimetable, fetchTimetable, saveTimetable, addTeacherMessage, updatePassword } = useAppContext();
@@ -20,6 +21,7 @@ const StudentDashboard = () => {
   const [pwConfirm, setPwConfirm] = useState('');
   const [pwError, setPwError] = useState('');
   const [pwSuccess, setPwSuccess] = useState(false);
+  const [showUserManual, setShowUserManual] = useState(false);
 
   // Timetable State
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -122,6 +124,14 @@ const StudentDashboard = () => {
               title="비밀번호 변경"
           >
               <KeyRound className="w-4 h-4" /> <span className="hidden sm:inline-block">비번 변경</span>
+          </button>
+
+          <button
+              onClick={() => setShowUserManual(true)}
+              className="flex items-center gap-1 text-gray-500 hover:text-indigo-600 text-xs md:text-sm font-bold bg-gray-100 hover:bg-gray-200 px-2.5 md:px-3 py-2 rounded-lg transition-colors h-9"
+              title="63랜드 설명서"
+          >
+              <BookOpen className="w-4 h-4" /> <span className="hidden sm:inline-block">도움말</span>
           </button>
 
           <button onClick={logout} className="text-gray-500 hover:text-red-500 bg-gray-100 hover:bg-red-50 px-2.5 md:px-3 flex items-center gap-1 py-2 rounded-lg transition-colors h-9 font-bold">
@@ -416,6 +426,8 @@ const StudentDashboard = () => {
         <p>© 2026 63랜드 · 학급 경영 시스템</p>
         <p className="mt-1 font-mono text-[10px] opacity-50">v1.2 (Updated)</p>
       </div>
+
+      {showUserManual && <UserManual onClose={() => setShowUserManual(false)} />}
     </div>
   );
 };
