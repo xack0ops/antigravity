@@ -1328,7 +1328,7 @@ const ScoreShopAdmin = ({ scoreShop, scoreTransactions, users, addScoreShopItem,
         <div className="space-y-6">
             {/* 탭 */}
             <div className="flex gap-2 border-b border-gray-100 pb-1">
-                {[['shop', '차 사용처 관리'], ['scores', '학생 점수 현황'], ['grant', '점수 부여 관리']].map(([id, label]) => (
+                {[['shop', '점수 사용처 관리'], ['scores', '학생 점수 현황'], ['grant', '점수 부여 관리']].map(([id, label]) => (
                     <button key={id} onClick={() => setTab(id)}
                         className={`px-4 py-2 rounded-lg font-bold text-sm transition-colors ${tab === id ? 'bg-amber-100 text-amber-700' : 'text-gray-400 hover:text-gray-600'}`}
                     >{label}</button>

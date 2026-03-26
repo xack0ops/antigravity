@@ -467,6 +467,23 @@ export const AppProvider = ({ children }) => {
     await updateDoc(userRef, { ministryId, roleIds });
   };
 
+  const batchAssignMinistries = async (assignments) => {
+    // assignments: { [userId]: ministryId }
+    const batch = writeBatch(db);
+    Object.entries(assignments).forEach(([userId, ministryId]) => {
+      const userRef = doc(db, 'users', userId);
+      if (ministryId) {
+        // 해당 부서(ministryId)에 속한 모든 역할 찾기
+        const deptRoles = roles.filter(r => r.ministryId === ministryId).map(r => r.id);
+        batch.update(userRef, { ministryId, roleIds: deptRoles });
+      } else {
+        // 미배정 시 역할도 모두 초기화
+        batch.update(userRef, { ministryId: null, roleIds: [] });
+      }
+    });
+    await batch.commit();
+  };
+
   const updatePassword = async (userId, newPassword) => {
     const userRef = doc(db, 'users', userId);
     await updateDoc(userRef, { password: newPassword });
@@ -956,6 +973,7 @@ export const AppProvider = ({ children }) => {
       updateUserPastMinistries,
       getUserScoreSummary,
       syncRoles,
+      batchAssignMinistries,
       currentTimetable, fetchTimetable, saveTimetable, fetchAllTimetables, subscribeToTimetable
     }}>
       {children}

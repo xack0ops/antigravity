@@ -8,7 +8,7 @@ const JobManagement = () => {
     addMinistry, updateMinistry, deleteMinistry, 
     addRole, updateRole, deleteRole, 
     adminAddTask, updateTask, deleteTask,
-    syncRoles
+    syncRoles, batchAssignMinistries
   } = useAppContext();
 
   const [activeTab, setActiveTab] = useState('organization'); // 'organization' | 'assignment' | 'history'
@@ -162,6 +162,56 @@ const JobManagement = () => {
   useEffect(() => {
      if (jobAppConfig?.title) setTitleInput(jobAppConfig.title);
   }, [jobAppConfig?.title]);
+
+
+  // --- Draft Assignment State (explicit changes only) ---
+  const [draftAssignments, setDraftAssignments] = useState({});
+
+  const handleDraftChange = (userId, minId) => {
+    setDraftAssignments(prev => {
+      const copy = { ...prev };
+      if (!minId) {
+        delete copy[userId];
+      } else {
+        copy[userId] = minId;
+      }
+      return copy;
+    });
+  };
+
+  const handleBulkReset = () => {
+    if (window.confirm("모든 학생을 '미배정' 상태로 변경하도록 드래프트를 설정하시겠습니까?\n(저장 전에는 실제 데이터에 반영되지 않습니다)")) {
+      const resetDraft = {};
+      students.forEach(s => { resetDraft[s.id] = 'UNASSIGN'; });
+      setDraftAssignments(resetDraft);
+    }
+  };
+
+  const handleSaveAssignments = async () => {
+    const changesToApply = {};
+    students.forEach(s => {
+      const draftVal = draftAssignments[s.id];
+      if (draftVal === 'UNASSIGN') {
+        if (s.ministryId) changesToApply[s.id] = '';
+      } else if (draftVal && draftVal !== s.ministryId) {
+        changesToApply[s.id] = draftVal;
+      }
+    });
+
+    const changedCount = Object.keys(changesToApply).length;
+    if (changedCount === 0) { alert("드래프트에 변경된 사항이 없습니다."); return; }
+    
+    if (window.confirm(`${changedCount}명의 부서 배정 변경 사항이 있습니다. 저장하시겠습니까?\n(배정된 학생들은 해당 부서의 모든 역할을 자동으로 부여받습니다)`)) {
+      try {
+        await batchAssignMinistries(changesToApply);
+        alert("성공적으로 저장 및 반영되었습니다!");
+        setDraftAssignments({});
+      } catch (e) {
+        console.error(e);
+        alert("저장 중 오류가 발생했습니다.");
+      }
+    }
+  };
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 w-full overflow-hidden">
@@ -764,7 +814,12 @@ const JobManagement = () => {
                         <Users className="w-4 h-4 text-indigo-500" /> 부서 배정 현황:
                     </span>
                     {ministries.map(min => {
-                        const count = students.filter(s => s.ministryId === min.id).length;
+                        const count = students.filter(s => {
+                            const d = draftAssignments[s.id];
+                            if (d === 'UNASSIGN') return false;
+                            if (d) return d === min.id;
+                            return s.ministryId === min.id;
+                        }).length;
                         return (
                             <div key={min.id} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-sm font-bold bg-white shadow-sm ${min.color} border-opacity-30`}>
                                 <span>{min.name}</span>
@@ -774,7 +829,16 @@ const JobManagement = () => {
                     })}
                     <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-sm font-bold text-gray-500 bg-gray-50 border-gray-200 shadow-sm">
                         <span>미배정</span>
-                        <span className="bg-white border border-gray-100 px-1.5 py-0.5 rounded text-xs">{students.filter(s => !s.ministryId).length}명</span>
+                        <span className="bg-white border border-gray-100 px-1.5 py-0.5 rounded text-xs">{students.filter(s => {
+                            const d = draftAssignments[s.id];
+                            if (d === 'UNASSIGN') return true;
+                            if (d) return false;
+                            return !s.ministryId;
+                        }).length}명</span>
+                    </div>
+                    <div className="ml-auto flex gap-2 flex-wrap mt-2 sm:mt-0">
+                        <button onClick={handleBulkReset} className="text-xs font-bold text-red-500 hover:bg-red-50 px-3 py-1.5 rounded-lg border border-red-200 transition-colors whitespace-nowrap">모든 학생 미배정 (드래프트)</button>
+                        <button onClick={handleSaveAssignments} className="text-xs font-bold bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-1.5 rounded-lg shadow-sm transition-all flex items-center gap-1.5 whitespace-nowrap"><CheckCircle2 className="w-3.5 h-3.5" /> 배정 확정 및 저장</button>
                     </div>
                 </div>
 
@@ -807,7 +871,7 @@ const JobManagement = () => {
                                     <th className={`p-4 text-sm font-bold whitespace-nowrap w-[100px] ${sortOption === 'choice2' ? 'text-indigo-600 bg-indigo-50/50' : 'text-gray-500'}`}>2지망</th>
                                     <th className={`p-4 text-sm font-bold whitespace-nowrap w-[100px] ${sortOption === 'choice3' ? 'text-indigo-600 bg-indigo-50/50' : 'text-gray-500'}`}>3지망</th>
                                     <th className="p-4 text-sm font-bold text-gray-500 whitespace-nowrap min-w-[200px]">지원 이유</th>
-                                    <th className="p-4 text-sm font-bold text-gray-500 whitespace-nowrap w-[160px]">부서 즉시 배정</th>
+                                    <th className="p-4 text-sm font-bold text-gray-500 whitespace-nowrap w-[160px]">부서 배정 (드래프트)</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
@@ -888,28 +952,27 @@ const JobManagement = () => {
                                             </td>
                                             <td className="p-4">
                                                 <select 
-                                                    value={student.ministryId || ''}
+                                                    value={draftAssignments[student.id] || ''}
                                                     onChange={(e) => {
                                                         const newMinId = e.target.value;
-                                                        if (newMinId) {
+                                                        if (newMinId && newMinId !== 'UNASSIGN') {
                                                             const alreadyHad = student.pastMinistries?.some(h => 
                                                                 typeof h === 'string' ? h === newMinId : (h?.ministryId === newMinId)
                                                             );
                                                             if (alreadyHad) {
                                                                 if (!window.confirm("이 학생은 이전에 해당 부서에서 활동한 적이 있습니다.\n정말 이 부서로 배정하시겠습니까?")) {
-                                                                    e.target.value = student.ministryId || '';
                                                                     return;
                                                                 }
                                                             }
                                                         }
-                                                        const roles = newMinId === student.ministryId ? student.roleIds : [];
-                                                        assignStudentRoles(student.id, newMinId || null, roles);
+                                                        handleDraftChange(student.id, newMinId);
                                                     }}
-                                                    className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm bg-white cursor-pointer hover:border-indigo-300 outline-none font-bold text-gray-700 min-w-[140px]"
+                                                    className={`px-3 py-1.5 border rounded-lg text-sm bg-white cursor-pointer hover:border-indigo-300 outline-none font-bold min-w-[140px] transition-colors ${draftAssignments[student.id] ? 'border-amber-500 text-amber-700 ring-2 ring-amber-100' : 'border-gray-200 text-gray-700'}`}
                                                 >
                                                     <option value="">--부서 선택--</option>
+                                                    <option value="UNASSIGN" className="text-red-500 font-bold">미배정으로 변경</option>
                                                     {ministries.map(m => (
-                                                        <option key={m.id} value={m.id}>{m.name}</option>
+                                                        <option key={m.id} value={m.id} className="text-gray-800 font-medium">{m.name}</option>
                                                     ))}
                                                 </select>
                                             </td>
