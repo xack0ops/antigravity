@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { Calendar, ClipboardList, Home, Gavel, ScrollText, Search, Briefcase, LogOut, KeyRound, X, Star, ShoppingBag, History, AlertCircle, BellRing, BookOpen } from 'lucide-react';
+import { Calendar, ClipboardList, Home, Gavel, ScrollText, Search, Briefcase, LogOut, KeyRound, X, Star, ShoppingBag, History, AlertCircle, BellRing, BookOpen, Users } from 'lucide-react';
 import { getLocalDateString } from '../utils/dateUtils';
 import { subscribeToCollection } from '../utils/firebaseUtils';
 import StateCouncil from './features/StateCouncil';
@@ -11,7 +11,7 @@ import FleaMarket from './features/FleaMarket';
 import UserManual from './features/UserManual';
 
 const PublicHome = () => {
-  const { subscribeToTimetable, currentUser, logout, updatePassword, scoreShop, getUserScoreSummary, addScoreTransaction, originalAdminId, stopImpersonating, studentNotices, markNoticeRead } = useAppContext();
+  const { subscribeToTimetable, currentUser, logout, updatePassword, scoreShop, getUserScoreSummary, addScoreTransaction, originalAdminId, stopImpersonating, studentNotices, markNoticeRead, ministries, users } = useAppContext();
   const [timetable, setTimetable] = useState({ periods: Array(6).fill('') });
   const [activeTab, setActiveTab] = useState('home');
   const [subTab, setSubTab] = useState(null);
@@ -29,6 +29,7 @@ const PublicHome = () => {
   const [pwError, setPwError] = useState('');
   const [pwSuccess, setPwSuccess] = useState(false);
   const [showUserManual, setShowUserManual] = useState(false);
+  const [showDepartmentModal, setShowDepartmentModal] = useState(false);
 
   const openPasswordModal = () => {
     setShowPasswordModal(true);
@@ -191,9 +192,18 @@ const PublicHome = () => {
         {activeTab === 'home' && (
           <div className="space-y-6">
             {/* Greeting */}
-            <div className="bg-white rounded-3xl px-7 py-6 border border-gray-100 shadow-sm">
-              <h1 className="text-2xl md:text-3xl font-black text-gray-800 mb-1">오늘도 즐거운 배움! 👋</h1>
-              <p className="text-gray-500 font-medium">{today}</p>
+            <div className="bg-white rounded-3xl px-7 py-6 border border-gray-100 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h1 className="text-2xl md:text-3xl font-black text-gray-800 mb-1">오늘도 즐거운 배움! 👋</h1>
+                <p className="text-gray-500 font-medium">{today}</p>
+              </div>
+              <button
+                onClick={() => setShowDepartmentModal(true)}
+                className="flex items-center justify-center gap-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-5 py-3 rounded-2xl text-sm font-bold transition-colors shrink-0 shadow-sm"
+              >
+                <Users className="w-5 h-5" />
+                <span>현재 부서 현황</span>
+              </button>
             </div>
 
             {/* 점수 카드 */}
@@ -654,6 +664,81 @@ const PublicHome = () => {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Department Status Modal */}
+      {showDepartmentModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl p-7 max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl relative">
+            <button onClick={() => setShowDepartmentModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+              <X size={24} />
+            </button>
+            
+            <div className="flex items-center gap-3 mb-6 shrink-0">
+              <div className="w-12 h-12 bg-indigo-100 rounded-2xl flex items-center justify-center">
+                <Users className="w-6 h-6 text-indigo-600" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-gray-800">현재 부서 현황</h2>
+                <p className="text-sm text-gray-500">우리 반 친구들이 어느 부서에서 일하고 있는지 확인해보세요!</p>
+              </div>
+            </div>
+
+            <div className="overflow-y-auto flex-1 pr-2 space-y-4">
+              {(() => {
+                const students = users.filter(u => u.type === 'student');
+                const unassignedStudents = students.filter(s => !s.ministryId);
+                
+                return (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {ministries.map(ministry => {
+                      const ministryStudents = students.filter(s => s.ministryId === ministry.id);
+                      if (ministryStudents.length === 0) return null;
+                      
+                      return (
+                        <div key={ministry.id} className="bg-gray-50 rounded-2xl p-5 border border-gray-100">
+                          <div className="flex items-center gap-2 mb-3">
+                            <span className="text-2xl">{ministry.icon || '🏢'}</span>
+                            <h3 className="font-bold text-gray-800">{ministry.name}</h3>
+                            <span className="bg-indigo-100 text-indigo-700 text-xs font-bold px-2 py-0.5 rounded-full ml-auto">
+                              {ministryStudents.length}명
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {ministryStudents.map(s => (
+                              <span key={s.id} className="bg-white border border-gray-200 text-gray-700 text-sm font-medium px-3 py-1.5 rounded-xl shadow-sm">
+                                {s.name}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {unassignedStudents.length > 0 && (
+                      <div className="bg-orange-50 rounded-2xl p-5 border border-orange-100">
+                        <div className="flex items-center gap-2 mb-3">
+                          <span className="text-2xl">⏳</span>
+                          <h3 className="font-bold text-orange-800">미배정 / 구직중</h3>
+                          <span className="bg-orange-200 text-orange-800 text-xs font-bold px-2 py-0.5 rounded-full ml-auto">
+                            {unassignedStudents.length}명
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {unassignedStudents.map(s => (
+                            <span key={s.id} className="bg-white border border-orange-200 text-orange-700 text-sm font-medium px-3 py-1.5 rounded-xl shadow-sm">
+                              {s.name}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
           </div>
         </div>
       )}

@@ -54,7 +54,44 @@ const PetitionBoard = () => {
     const [editData, setEditData] = useState(null);
 
     useEffect(() => {
-        const unsubPetitions = subscribeToCollection('petitions', setPetitions);
+        const unsubPetitions = subscribeToCollection('petitions', async (data) => {
+            const now = new Date();
+            const validPetitions = [];
+            const expiredPetitionIds = [];
+
+            data.forEach(petition => {
+                if (petition.agreeCount < 10) {
+                    const createdAt = petition.createdAt?.toDate ? petition.createdAt.toDate() : (petition.createdAt ? new Date(petition.createdAt) : null);
+                    
+                    if (createdAt) {
+                        const diffTime = Math.abs(now - createdAt);
+                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                        
+                        if (diffDays > 14) {
+                            expiredPetitionIds.push(petition.id);
+                        } else {
+                            validPetitions.push(petition);
+                        }
+                    } else {
+                        validPetitions.push(petition);
+                    }
+                } else {
+                    validPetitions.push(petition);
+                }
+            });
+
+            setPetitions(validPetitions);
+
+            if (expiredPetitionIds.length > 0) {
+                for (const id of expiredPetitionIds) {
+                    try {
+                        await deletePetition(id);
+                    } catch (error) {
+                        console.error("Failed to auto-delete petition:", id, error);
+                    }
+                }
+            }
+        });
         const unsubGuides = subscribeToDoc('features', 'assembly_guides', (data) => {
             if (data) {
                 setGuides({
