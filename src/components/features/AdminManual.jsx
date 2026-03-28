@@ -21,7 +21,7 @@ const SECTIONS = [
         details: ['우측 패널에 대기중인 업무가 실시간으로 쌓입니다.']
       },
       { 
-        icon: '🛠️', title: '부서 도구함 리모컨', desc: '시간표 배정, 상점 아이템 등록, 벌금 등 부서별 최고 권한 기능을 모두 확인하고 강제로 조작할 수 있습니다.',
+        icon: '🛠️', title: '부서 도구함 리모컨', desc: '일정 관리, 상점 아이템 등록, 벌금 등 부서별 최고 권한 기능을 모두 확인하고 강제로 조작할 수 있습니다.',
         actionBox: { label: '부서 제어판', buttonName: '부서 도구함 열기', color: 'bg-emerald-600' }
       },
     ]
@@ -94,9 +94,9 @@ const SECTIONS = [
     content: '학년 말, 학기 초, 혹은 긴급 수정이 필요할 때 각 부서 장관들만 쓰는 기능을 선생님 권한으로 직접 만지는 메뉴입니다.',
     steps: [
       { 
-        icon: '📅', title: '시간표 관리자', desc: '일주일치나 당일 시간표를 미리 짤 수 있습니다.',
-        details: ['[시간표 편집기]를 열어 과목과 단원명을 일괄 수정하세요.'],
-        actionBox: { label: '접근 버튼', buttonName: '시간표 편집기', color: 'bg-indigo-50 text-indigo-700' }
+        icon: '📅', title: '일정 관리자', desc: '기본 시간표 외에 특정 날짜의 특별 일정을 달력에서 관리할 수 있습니다.',
+        details: ['[일정 관리자]를 열어 특정 날짜를 선택하고 과목을 수정하세요.', '개별 설정이 없는 날은 기본 시간표가 자동으로 노출됩니다.'],
+        actionBox: { label: '접근 버튼', buttonName: '일정 관리자', color: 'bg-indigo-50 text-indigo-700' }
       },
       { 
         icon: '🏢', title: '업무 및 부서 관리 (조직도)', desc: '1년 동안 운영할 부서를 개설하고, 역할을 마스터 통제합니다.',

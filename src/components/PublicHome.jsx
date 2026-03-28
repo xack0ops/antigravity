@@ -255,9 +255,22 @@ const PublicHome = () => {
               <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
                 <div className="bg-indigo-50 px-7 py-5 border-b border-indigo-100 flex items-center gap-3">
                   <Calendar className="w-6 h-6 text-indigo-600" />
-                  <h2 className="text-lg font-bold text-indigo-900">오늘의 수업</h2>
+                  <h2 className="text-lg font-bold text-indigo-900">오늘의 일정</h2>
                 </div>
-                <div className="px-7 py-5 space-y-3">
+                <div className="px-7 py-5 space-y-4">
+                  {/* Events Section */}
+                  {timetable?.events?.length > 0 && (
+                    <div className="flex flex-col gap-2 mb-4">
+                      {timetable.events.map((event, idx) => (
+                        <div key={idx} className="flex items-center gap-3 bg-indigo-600 text-white px-4 py-3 rounded-2xl shadow-md transform hover:scale-[1.02] transition-all">
+                          <Star className="w-5 h-5 text-amber-300 fill-amber-300" />
+                          <span className="font-black text-base">{event}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Periods Section */}
                   {timetable?.periods?.map((subject, index) => (
                     <div key={index} className="flex items-center gap-4 group">
                       <div className="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-center font-black text-gray-400 text-sm group-hover:bg-indigo-100 group-hover:text-indigo-600 transition-colors shrink-0">

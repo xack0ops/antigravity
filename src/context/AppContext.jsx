@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { INITIAL_DATA } from '../data/mockData';
+import { DEFAULT_TIMETABLE } from '../data/timetableData';
 import { WIKI_DATA } from '../data/wikiData';
 import { db } from '../firebase';
 import { getLocalDateString } from '../utils/dateUtils';
@@ -907,37 +908,80 @@ export const AppProvider = ({ children }) => {
     return onSnapshot(docRef, (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
-        // Update local state if it matches the current context needed? 
-        // Or just let the component handle the state update via callback?
-        // Let's do both: update global state if currently selected, but primarily callback.
-        callback(data);
+        callback({
+          periods: data.periods || Array(6).fill(''),
+          events: data.events || [],
+          ...data
+        });
       } else {
-        callback({ periods: Array(6).fill('') });
+        const date = new Date(dateStr);
+        const day = date.getDay(); // 0(Sun) - 6(Sat)
+        if (day >= 1 && day <= 5) {
+          callback({ 
+            periods: DEFAULT_TIMETABLE[day] || Array(6).fill(''), 
+            events: [],
+            isDefault: true 
+          });
+        } else {
+          callback({ periods: Array(6).fill(''), events: [], isDefault: true });
+        }
       }
     });
   };
 
-  const fetchTimetable = async (dateStr) => {
-    // dateStr format: YYYY-MM-DD
+  const fetchTimetable = useCallback(async (dateStr) => {
+    // Note: We don't clear state here anymore to prevent blank screens.
+    // The component handles date matching via currentTimetable.date.
+
     const docRef = doc(db, 'timetables', dateStr);
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {
-        setCurrentTimetable(docSnap.data());
+        const data = docSnap.data();
+        setCurrentTimetable({
+          date: dateStr,
+          periods: data.periods || Array(6).fill(''),
+          events: data.events || [],
+          ...data
+        });
     } else {
-        setCurrentTimetable({ periods: Array(6).fill('') });
-    }
-  };
+        // Parse date manually to avoid UTC shift issues
+        const parts = dateStr.split('-').map(Number);
+        const date = new Date(parts[0], parts[1] - 1, parts[2]);
+        const day = date.getDay();
+        
+        const defaultData = {
+          date: dateStr,
+          periods: Array(6).fill(''),
+          events: [],
+          isDefault: true
+        };
 
-  const saveTimetable = async (dateStr, periods) => {
+        if (day >= 1 && day <= 5) {
+          defaultData.periods = DEFAULT_TIMETABLE[day] || Array(6).fill('');
+        }
+        
+        setCurrentTimetable(defaultData);
+    }
+  }, []);
+
+  const deleteTimetableOverride = useCallback(async (dateStr) => {
     const docRef = doc(db, 'timetables', dateStr);
-    await setDoc(docRef, {
+    await deleteDoc(docRef);
+    // Local state will be updated via listener or subsequent fetch
+  }, []);
+
+  const saveTimetable = useCallback(async (dateStr, periods, events = []) => {
+    const docRef = doc(db, 'timetables', dateStr);
+    const data = {
         periods,
-        lastUpdatedBy: currentUser.id,
+        events,
+        lastUpdatedBy: currentUser?.id,
         updatedAt: new Date().toISOString()
-    });
-    // Optimistic update
-    setCurrentTimetable({ periods });
-  };
+    };
+    await setDoc(docRef, data);
+    // Optimistic update with date tracking
+    setCurrentTimetable({ date: dateStr, ...data });
+  }, [currentUser]);
 
   const fetchAllTimetables = async () => {
     const q = query(collection(db, 'timetables'));
@@ -974,7 +1018,7 @@ export const AppProvider = ({ children }) => {
       getUserScoreSummary,
       syncRoles,
       batchAssignMinistries,
-      currentTimetable, fetchTimetable, saveTimetable, fetchAllTimetables, subscribeToTimetable
+      currentTimetable, fetchTimetable, saveTimetable, deleteTimetableOverride, fetchAllTimetables, subscribeToTimetable
     }}>
       {children}
     </AppContext.Provider>

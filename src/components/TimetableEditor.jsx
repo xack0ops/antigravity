@@ -5,6 +5,13 @@ import { Save } from 'lucide-react';
 const TimetableEditor = ({ initialPeriods, onSave, onCancel }) => {
     const [editPeriods, setEditPeriods] = useState(initialPeriods || Array(6).fill(''));
 
+    // Sync internal state if initialPeriods prop changes (e.g. data finally loaded)
+    React.useEffect(() => {
+        if (initialPeriods) {
+            setEditPeriods(initialPeriods);
+        }
+    }, [initialPeriods]);
+
     return (
         <div className="grid gap-3">
             {editPeriods.map((subject, index) => (

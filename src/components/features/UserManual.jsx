@@ -18,7 +18,7 @@ const SECTIONS = [
         actionBox: { label: '버튼 생김새', buttonName: '로그인', color: 'bg-indigo-600' }
       },
       { 
-        icon: '🏠', title: '홈 화면 확인', desc: '오늘의 시간표, 알림장, 나의 점수를 한눈에 확인하세요.',
+        icon: '🏠', title: '홈 화면 확인', desc: '오늘의 일정, 알림장, 나의 점수를 한눈에 확인하세요.',
         details: ['시간표는 매일 자동으로 갱신됩니다.', '오른쪽 위에 달린 🔔 알림 뱃지에 숫자가 뜨면 꼭 확인하세요!']
       },
       { 
@@ -48,7 +48,7 @@ const SECTIONS = [
         actionBox: { label: '포인트 상점', buttonName: '점수 사용하기', color: 'bg-blue-50 text-blue-600' }
       },
       { 
-        icon: '📅', title: '오늘의 수업 (시간표)', desc: '오늘 진행되는 1~6교시 수업을 확인할 수 있어요.',
+        icon: '📅', title: '오늘의 일정', desc: '오늘 진행되는 1~6교시 수업을 확인할 수 있어요.',
         details: ['어떤 과목인지, 단원명은 무엇인지 미리 볼 수 있어요.']
       },
       { 

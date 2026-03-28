@@ -5,9 +5,8 @@ import { db } from '../firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { GOOGLE_CLIENT_ID, GOOGLE_SHEETS_SCOPE } from '../googleConfig';
 import JudicialSystem from './features/JudicialSystem';
-import { INITIAL_DATA, CURRICULUM_DATA } from '../data/mockData';
-import { getLocalDateString } from '../utils/dateUtils';
-import TimetableEditor from './TimetableEditor';
+import { CURRICULUM_DATA } from '../data/mockData';
+import ScheduleManager from './features/ScheduleManager';
 import WikiManager from './WikiManager';
 import JobManagement from './features/JobManagement';
 import ScoreManager from './features/ScoreManager';
@@ -20,7 +19,7 @@ import AdminManual from './features/AdminManual';
 import BoardGameManager from './features/BoardGameManager';
 
 const AdminDashboard = () => {
-  const { users, roles, tasks, ministries, assignStudentRoles, verifyTask, updatePassword, addUser, deleteUser, logout, fetchAllTimetables, saveTimetable, teacherMessages, deleteTeacherMessage, currentUser, scoreTransactions, scoreShop, addScoreShopItem, updateScoreShopItem, deleteScoreShopItem, getUserScoreSummary, impersonateUser, studentNotices, addStudentNotice, deleteStudentNotice } = useAppContext();
+  const { users, roles, tasks, ministries, assignStudentRoles, verifyTask, updatePassword, addUser, deleteUser, logout, fetchAllTimetables, teacherMessages, deleteTeacherMessage, currentUser, scoreTransactions, scoreShop, addScoreShopItem, updateScoreShopItem, deleteScoreShopItem, getUserScoreSummary, impersonateUser, studentNotices, addStudentNotice, deleteStudentNotice } = useAppContext();
   const [activeTab, setActiveTab] = useState('management'); // 'management', 'curriculum', 'tools', 'judicial', 'messages'
   const [activeTool, setActiveTool] = useState(null); // 'timetable', etc.
   const [showAdminManual, setShowAdminManual] = useState(false);
@@ -48,7 +47,7 @@ const AdminDashboard = () => {
       data.forEach(entry => {
           if (!entry.periods) return;
           entry.periods.forEach((p, index) => {
-              if (!p) return;
+              if (!p || typeof p !== 'string') return;
               // Parse string like "[수학] 1단원 - ..."
               const match = p.match(/^\[(.*?)\] (.*?) -/);
               if (match) {
@@ -98,10 +97,6 @@ const AdminDashboard = () => {
       return student ? student.name : '알 수 없음';
   };
 
-  const getMinistryColor = (ministryId) => {
-    const ministry = ministries.find(m => m.id === ministryId);
-    return ministry ? ministry.color : 'text-gray-500 bg-gray-100';
-  };
 
   const handlePasswordUpdate = (userId) => {
       if(!newPassword) {
@@ -554,7 +549,7 @@ const AdminDashboard = () => {
                                     <Calendar className="w-8 h-8 text-indigo-600 group-hover:text-white transition-colors" />
                                 </div>
                                 <div className="text-center">
-                                    <h3 className="font-bold text-lg text-gray-800">시간표 관리자</h3>
+                                    <h3 className="font-bold text-lg text-gray-800">일정 관리자</h3>
                                     <p className="text-gray-400 text-sm mt-1">교육부 권한</p>
                                 </div>
                             </button>
@@ -668,7 +663,7 @@ const AdminDashboard = () => {
                         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 animate-in fade-in zoom-in-95 duration-200">
                              <div className="flex items-center justify-between mb-6 border-b border-gray-100 pb-4">
                                  <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                                     {activeTool === 'timetable_editor' && <><Calendar className="w-6 h-6 text-indigo-600"/> 시간표 관리자</>}
+                                     {activeTool === 'timetable_editor' && <><Calendar className="w-6 h-6 text-indigo-600"/> 일정 관리자</>}
                                      {activeTool === 'wiki_manager' && <><BookOpen className="w-6 h-6 text-indigo-600"/> 물어보살 관리자</>}
                                      {activeTool === 'job_management' && <><Shield className="w-6 h-6 text-indigo-600"/> 업무 관리 (조직도 구성)</>}
                                  {activeTool === 'life_note' && <><BookOpen className="w-6 h-6 text-sky-600"/> 과제 / 수행평가 / 인생노트 점검</>}
@@ -686,7 +681,7 @@ const AdminDashboard = () => {
                              </div>
 
                              {activeTool === 'timetable_editor' && (
-                                 <AdminTimetableManager onSave={saveTimetable} />
+                                 <ScheduleManager />
                              )}
                              {activeTool === 'wiki_manager' && (
                                  <WikiManager onClose={() => setActiveTool(null)} />
@@ -762,55 +757,6 @@ const AdminDashboard = () => {
   );
 };
 
-// Internal Component for Admin Timetable Management
-const AdminTimetableManager = ({ onSave }) => {
-    const { fetchTimetable, currentTimetable } = useAppContext();
-    const [selectedDate, setSelectedDate] = useState(new Date());
-    const [editPeriods, setEditPeriods] = useState(Array(6).fill(''));
-
-    // Fetch on date change
-    useEffect(() => {
-        const dateStr = getLocalDateString(selectedDate);
-        fetchTimetable(dateStr);
-    }, [selectedDate]);
-
-    // Sync state
-    useEffect(() => {
-        setEditPeriods(currentTimetable?.periods || Array(6).fill(''));
-    }, [currentTimetable]);
-
-    const handleSave = async (periods) => {
-        const dateStr = getLocalDateString(selectedDate);
-        await onSave(dateStr, periods);
-        alert('시간표가 저장되었습니다.');
-    };
-
-    const handleDateChange = (days) => {
-      const newDate = new Date(selectedDate);
-      newDate.setDate(selectedDate.getDate() + days);
-      setSelectedDate(newDate);
-    }
-
-    return (
-        <div className="max-w-xl mx-auto">
-             <div className="flex items-center justify-center gap-4 mb-6 bg-gray-50 p-3 rounded-xl">
-                 <button onClick={() => handleDateChange(-1)} className="p-2 hover:bg-white rounded-lg shadow-sm transition-all"><ChevronDown className="w-5 h-5 text-gray-600 rotate-90" /></button>
-                 <span className="text-lg font-bold text-gray-700 min-w-[140px] text-center">
-                     {selectedDate.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' })}
-                 </span>
-                 <button onClick={() => handleDateChange(1)} className="p-2 hover:bg-white rounded-lg shadow-sm transition-all"><ChevronUp className="w-5 h-5 text-gray-600 rotate-90" /></button>
-             </div>
-
-             <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100">
-                <TimetableEditor 
-                    initialPeriods={editPeriods}
-                    onSave={handleSave}
-                    onCancel={() => {}} // No cancel action in standalone mode, simply don't save
-                />
-             </div>
-        </div>
-    );
-}
 
 const CurriculumView = ({ stats, timetables, onRefresh }) => {
     const { saveTimetable } = useAppContext();
