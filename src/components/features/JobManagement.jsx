@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../../context/AppContext';
 import { Plus, Edit2, Trash2, Building, Shield, ClipboardList, Info, ChevronDown, ChevronUp, BookOpen, Users, CheckCircle2 } from 'lucide-react';
+
 const JobManagement = () => {
   const { 
     users, ministries, roles, tasks, jobApplications, jobAppConfig,
@@ -30,7 +31,6 @@ const JobManagement = () => {
   const [newMinistryName, setNewMinistryName] = useState('');
   const [newRoleName, setNewRoleName] = useState('');
   const [newTaskText, setNewTaskText] = useState('');
-  const [newTaskType, setNewTaskType] = useState('self'); // 'self' or 'admin'
   const [newTaskFreqType, setNewTaskFreqType] = useState('daily');
   const [newTaskFreqDays, setNewTaskFreqDays] = useState([]);
   const [newTaskAction, setNewTaskAction] = useState(''); // '' | 'open_petition' | 'open_judicial' | 'open_wiki'
@@ -139,7 +139,7 @@ const JobManagement = () => {
       id: `t_${Date.now()}`,
       roleId: selectedRoleId,
       text: newTaskText.trim(),
-      type: newTaskType,
+      type: 'self',
       frequency: {
           type: newTaskFreqType,
           days: newTaskFreqType === 'specific_days' ? newTaskFreqDays : []
@@ -512,17 +512,6 @@ const JobManagement = () => {
                         </div>
                     ) : (
                         <div className="space-y-4">
-                            <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-xl flex items-start gap-3">
-                                <Info className="w-5 h-5 text-indigo-500 shrink-0 mt-0.5" />
-                                <div>
-                                    <h4 className="text-sm font-bold text-indigo-900 leading-tight">팁: 할 일 유형의 차이</h4>
-                                    <p className="text-xs text-indigo-700 mt-1 leading-relaxed">
-                                        <b>스스로:</b> 학생이 직접 체크박스를 눌러 &apos;완료&apos; 처리할 수 있습니다.<br/>
-                                        <b>선생님 검사:</b> 학생이 클릭하면 &apos;승인 대기&apos; 상태가 되며, 선생님이 [학생 관리] 탭에서 승인해야 완료됩니다.
-                                    </p>
-                                </div>
-                            </div>
-
                             <div className="space-y-2">
                                 {roleTasks.map(task => {
                                     const freq = task.frequency || { type: 'daily', days: [] };
@@ -535,40 +524,30 @@ const JobManagement = () => {
                                                     type="text" 
                                                     id={`task-text-${task.id}`}
                                                     defaultValue={task.text}
-                                                    className="w-full px-2 py-1.5 text-sm border rounded outline-none"
+                                                    className="w-full px-2 py-1.5 text-sm border rounded outline-none font-medium"
                                                 />
                                                 <div className="flex flex-col gap-2">
-                                                    <div className="flex gap-2">
-                                                        <select 
-                                                            id={`task-freq-type-${task.id}`}
-                                                            defaultValue={freq.type}
-                                                            onChange={(e) => {
-                                                                // Use a temporary state or just rely on DOM for simple toggle
-                                                                const daySelector = document.getElementById(`task-freq-days-container-${task.id}`);
-                                                                if (daySelector) {
-                                                                    daySelector.style.display = e.target.value === 'specific_days' ? 'flex' : 'none';
-                                                                }
-                                                            }}
-                                                            className="w-[120px] px-2 py-1.5 text-sm border rounded outline-none bg-white"
-                                                        >
-                                                            <option value="daily">매일 할 일</option>
-                                                            <option value="specific_days">특정 요일</option>
-                                                            <option value="weekly">주 1회</option>
-                                                        </select>
-                                                        <select 
-                                                            id={`task-type-${task.id}`}
-                                                            defaultValue={task.type}
-                                                            className="flex-1 px-2 py-1.5 text-sm border rounded outline-none bg-white"
-                                                        >
-                                                            <option value="self">스스로 완료</option>
-                                                            <option value="admin">선생님 검사</option>
-                                                        </select>
-                                                    </div>
+                                                    <select 
+                                                        id={`task-freq-type-${task.id}`}
+                                                        defaultValue={freq.type}
+                                                        onChange={(e) => {
+                                                            const daySelector = document.getElementById(`task-freq-days-container-${task.id}`);
+                                                            if (daySelector) {
+                                                                daySelector.style.display = e.target.value === 'specific_days' ? 'flex' : 'none';
+                                                            }
+                                                        }}
+                                                        className="w-full px-2 py-1.5 text-sm border rounded outline-none bg-white font-medium text-gray-700"
+                                                    >
+                                                        <option value="daily">매일 할 일</option>
+                                                        <option value="specific_days">특정 요일</option>
+                                                        <option value="weekly">주 1회</option>
+                                                    </select>
+                                                    
                                                     {/* 실행 링크 */}
                                                     <select
                                                         id={`task-action-${task.id}`}
                                                         defaultValue={task.action || ''}
-                                                        className="w-full px-2 py-1.5 text-sm border rounded outline-none bg-white"
+                                                        className="w-full px-2 py-1.5 text-sm border rounded outline-none bg-white font-medium text-gray-700"
                                                     >
                                                         <option value="">실행 링크 없음</option>
                                                         <option value="open_petition">🏛️ 국무회의 탭 열기</option>
@@ -625,7 +604,7 @@ const JobManagement = () => {
                                                                 const actionVal = document.getElementById(`task-action-${task.id}`)?.value || '';
                                                                 const updateData = {
                                                                     text: document.getElementById(`task-text-${task.id}`).value,
-                                                                    type: document.getElementById(`task-type-${task.id}`).value,
+                                                                    type: 'self',
                                                                     frequency: {
                                                                         type: freqTypeVal,
                                                                         days: selectedDays
@@ -636,9 +615,9 @@ const JobManagement = () => {
                                                                 updateTask(task.id, updateData);
                                                                 setEditingTask(null);
                                                             }}
-                                                            className="px-3 py-1.5 bg-green-500 text-white rounded text-xs font-bold shrink-0"
+                                                            className="px-3 py-1.5 bg-green-500 text-white rounded text-xs font-bold shrink-0 shadow-sm"
                                                         >저장</button>
-                                                        <button onClick={() => setEditingTask(null)} className="px-3 py-1.5 bg-gray-200 rounded text-xs shrink-0">취소</button>
+                                                        <button onClick={() => setEditingTask(null)} className="px-3 py-1.5 bg-gray-200 rounded text-xs shrink-0 font-medium">취소</button>
                                                     </div>
                                                 </div>
                                             </div>
@@ -646,9 +625,6 @@ const JobManagement = () => {
                                             <div className="flex justify-between items-start gap-2">
                                                 <div className="flex-1">
                                                     <div className="flex items-center gap-1.5 mb-1.5">
-                                                        <span className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded ${task.type === 'admin' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-600'}`}>
-                                                            {task.type === 'admin' ? '선생님 검사' : '스스로'}
-                                                        </span>
                                                         <span className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded border ${
                                                             freq.type === 'daily' ? 'border-blue-200 text-blue-600 bg-blue-50' :
                                                             freq.type === 'weekly' ? 'border-purple-200 text-purple-600 bg-purple-50' :
@@ -667,8 +643,12 @@ const JobManagement = () => {
                                                     )}
                                                 </div>
                                                 <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <button onClick={() => setEditingTask(task.id)} className="p-1.5 text-gray-400 hover:text-blue-500 rounded"><Edit2 className="w-3.5 h-3.5" /></button>
-                                                    <button onClick={() => deleteTask(task.id)} className="p-1.5 text-gray-400 hover:text-red-500 rounded"><Trash2 className="w-3.5 h-3.5" /></button>
+                                                    <button onClick={() => setEditingTask(task.id)} className="p-1.5 text-gray-400 hover:text-blue-500 rounded-md hover:bg-blue-50 transition-colors">
+                                                      <Edit2 className="w-3.5 h-3.5" />
+                                                    </button>
+                                                    <button onClick={() => deleteTask(task.id)} className="p-1.5 text-gray-400 hover:text-red-500 rounded-md hover:bg-red-50 transition-colors">
+                                                      <Trash2 className="w-3.5 h-3.5" />
+                                                    </button>
                                                 </div>
                                             </div>
                                         )}
@@ -676,45 +656,38 @@ const JobManagement = () => {
                                 )})}
                             </div>
 
-                            <div className="bg-gray-50 border border-gray-200 p-3 rounded-xl flex flex-col gap-2">
-                                <h4 className="text-xs font-bold text-gray-500 mb-1">새 할 일 추가</h4>
+                            <div className="bg-gray-50 border border-gray-200 p-4 rounded-xl flex flex-col gap-3 shadow-inner">
+                                <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">새 할 일 추가</h4>
                                 <input 
                                     type="text" 
                                     value={newTaskText}
                                     onChange={(e) => setNewTaskText(e.target.value)}
-                                    placeholder="무엇을 해야 할까요?"
-                                    className="w-full px-2 py-1.5 text-sm border rounded outline-none"
+                                    placeholder="업무 내용을 입력하세요..."
+                                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 transition-all font-medium"
                                 />
-                                <div className="flex flex-col gap-2">
-                                    <div className="flex gap-2">
+                                <div className="flex flex-col gap-3">
+                                    <div className="flex flex-col gap-1.5">
+                                        <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">반복 주기</label>
                                         <select 
                                             value={newTaskFreqType}
                                             onChange={(e) => setNewTaskFreqType(e.target.value)}
-                                            className="w-[120px] px-2 py-1.5 text-sm border rounded outline-none bg-white font-medium text-gray-700 shrink-0"
+                                            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none bg-white font-bold text-gray-700 hover:border-gray-300 transition-colors"
                                         >
                                             <option value="daily">매일 할 일</option>
                                             <option value="specific_days">특정 요일</option>
                                             <option value="weekly">주 1회</option>
                                         </select>
-                                        <select 
-                                            value={newTaskType}
-                                            onChange={(e) => setNewTaskType(e.target.value)}
-                                            className="flex-1 px-2 py-1.5 text-sm border rounded outline-none bg-white font-medium text-gray-700"
-                                        >
-                                            <option value="self">스스로 완료 가능</option>
-                                            <option value="admin">선생님 확인(검사) 필요</option>
-                                        </select>
                                     </div>
                                     
                                     {newTaskFreqType === 'specific_days' && (
-                                        <div className="flex gap-1 justify-center mt-1 p-2 bg-white rounded border border-gray-100">
+                                        <div className="flex gap-1.5 justify-center p-2 bg-white rounded-lg border border-gray-100 shadow-sm">
                                             {DAYS_OF_WEEK.map(day => (
                                                 <button
                                                     key={day.value}
                                                     onClick={() => handleDayToggle(day.value, true)}
-                                                    className={`w-8 h-8 rounded-full text-xs font-bold transition-colors ${
+                                                    className={`w-9 h-9 rounded-full text-xs font-bold transition-all ${
                                                         newTaskFreqDays.includes(day.value)
-                                                        ? 'bg-indigo-500 text-white shadow-sm'
+                                                        ? 'bg-indigo-500 text-white shadow-md scale-105'
                                                         : 'bg-gray-100 text-gray-500 hover:bg-indigo-50 hover:text-indigo-600'
                                                     }`}
                                                 >
@@ -724,23 +697,24 @@ const JobManagement = () => {
                                         </div>
                                     )}
 
-                                    {/* 실행 링크 */}
-                                    <select
-                                        value={newTaskAction}
-                                        onChange={(e) => setNewTaskAction(e.target.value)}
-                                        className="w-full px-2 py-1.5 text-sm border rounded outline-none bg-white font-medium text-gray-700"
-                                    >
-                                        <option value="">실행 링크 없음</option>
-                                        <option value="open_petition">🏛️ 국무회의 탭 열기</option>
-                                        <option value="open_judicial">⚖️ 재판소 탭 열기</option>
-                                        <option value="open_wiki">🔍 물어보살 탭 열기</option>
-                                    </select>
+                                    <div className="flex flex-col gap-1.5">
+                                        <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">실행 링크 (선택)</label>
+                                        <select
+                                            value={newTaskAction}
+                                            onChange={(e) => setNewTaskAction(e.target.value)}
+                                            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none bg-white font-bold text-gray-700 hover:border-gray-300 transition-colors"
+                                        >
+                                            <option value="">링크 없음</option>
+                                            <option value="open_petition">🏛️ 국무회의 탭 열기</option>
+                                            <option value="open_judicial">⚖️ 재판소 탭 열기</option>
+                                            <option value="open_wiki">🔍 물어보살 탭 열기</option>
+                                        </select>
+                                    </div>
 
                                     <button 
                                         onClick={handleAddTask}
                                         disabled={!newTaskText.trim() || !selectedRoleId}
-                                        className="w-full mt-1 px-3 py-2 bg-gray-800 hover:bg-gray-900 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold rounded text-sm transition-colors"
-                                        title={!newTaskText.trim() ? '할 일 내용을 입력해주세요' : !selectedRoleId ? '역할을 먼저 선택해주세요' : ''}
+                                        className="w-full mt-1 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold rounded-lg text-sm transition-all shadow-md active:scale-[0.98]"
                                     >저장하기</button>
                                 </div>
                             </div>

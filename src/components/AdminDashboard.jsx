@@ -1,11 +1,10 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { LogOut, CheckCircle2, KeyRound, UserPlus, Trash2, ChevronDown, ChevronUp, BookOpen, Wrench, Calendar, X, Scale, BellRing, Sheet, Loader2, ExternalLink, Shield, Star, Plus, Edit2, Gamepad2 } from 'lucide-react';
+import { LogOut, KeyRound, UserPlus, Trash2, ChevronDown, ChevronUp, BookOpen, Wrench, Calendar, X, Scale, BellRing, Sheet, Loader2, ExternalLink, Shield, Star, Plus, Edit2, Gamepad2 } from 'lucide-react';
 import { db } from '../firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { GOOGLE_CLIENT_ID, GOOGLE_SHEETS_SCOPE } from '../googleConfig';
 import JudicialSystem from './features/JudicialSystem';
-import { CURRICULUM_DATA } from '../data/mockData';
 import ScheduleManager from './features/ScheduleManager';
 import WikiManager from './WikiManager';
 import JobManagement from './features/JobManagement';
@@ -19,62 +18,12 @@ import AdminManual from './features/AdminManual';
 import BoardGameManager from './features/BoardGameManager';
 
 const AdminDashboard = () => {
-  const { users, roles, tasks, ministries, assignStudentRoles, verifyTask, updatePassword, addUser, deleteUser, logout, fetchAllTimetables, teacherMessages, deleteTeacherMessage, currentUser, scoreTransactions, scoreShop, addScoreShopItem, updateScoreShopItem, deleteScoreShopItem, getUserScoreSummary, impersonateUser, studentNotices, addStudentNotice, deleteStudentNotice } = useAppContext();
-  const [activeTab, setActiveTab] = useState('management'); // 'management', 'curriculum', 'tools', 'judicial', 'messages'
+  const { users, roles, tasks, ministries, assignStudentRoles, updatePassword, addUser, deleteUser, logout, teacherMessages, deleteTeacherMessage, currentUser, scoreTransactions, scoreShop, addScoreShopItem, updateScoreShopItem, deleteScoreShopItem, getUserScoreSummary, impersonateUser, studentNotices, addStudentNotice, deleteStudentNotice } = useAppContext();
+  const [activeTab, setActiveTab] = useState('management'); // 'management', 'tools', 'judicial', 'messages'
   const [activeTool, setActiveTool] = useState(null); // 'timetable', etc.
   const [showAdminManual, setShowAdminManual] = useState(false);
-  
-  // Curriculum State
-  const [timetables, setTimetables] = useState([]);
-  const [curriculumStats, setCurriculumStats] = useState({});
   const [assignmentTab, setAssignmentTab] = useState('life_note'); // 'life_note' or 'assignment'
-
-  useEffect(() => {
-      if (activeTab === 'curriculum') {
-          loadCurriculumStats();
-      }
-  }, [activeTab]);
-
-  const loadCurriculumStats = async () => {
-      const data = await fetchAllTimetables();
-      setTimetables(data);
-      calculateStats(data);
-  };
-
-  const calculateStats = (data) => {
-      const stats = {};
-      // Iterate all timetables
-      data.forEach(entry => {
-          if (!entry.periods) return;
-          entry.periods.forEach((p, index) => {
-              if (!p || typeof p !== 'string') return;
-              // Parse string like "[수학] 1단원 - ..."
-              const match = p.match(/^\[(.*?)\] (.*?) -/);
-              if (match) {
-                  const subject = match[1];
-                  const unitName = match[2];
-                  const key = `${subject}_${unitName}`;
-                  
-                  if (!stats[key]) stats[key] = { count: 0, lastDate: '1970-01-01', history: [] };
-                  
-                  stats[key].count += 1;
-                  stats[key].history.push({
-                      date: entry.id,
-                      periodIndex: index,
-                      text: p
-                  });
-                  
-                  if (entry.id > stats[key].lastDate) stats[key].lastDate = entry.id;
-              }
-          });
-      });
-      // Sort history by date desc
-      Object.values(stats).forEach(stat => {
-          stat.history.sort((a, b) => b.date.localeCompare(a.date));
-      });
-      setCurriculumStats(stats);
-  };
-
+  
   const [editingPasswordId, setEditingPasswordId] = useState(null);
   const [newPassword, setNewPassword] = useState('');
   
@@ -90,12 +39,7 @@ const AdminDashboard = () => {
   const [expandedStudentId, setExpandedStudentId] = useState(null);
   
   const students = users.filter(u => u.type === 'student').sort((a,b) => a.name.localeCompare(b.name));
-  const pendingTasks = tasks.filter(t => t.status === 'waiting_approval');
 
-  const getStudentName = (roleId) => {
-      const student = students.find(s => s.roleIds?.includes(roleId));
-      return student ? student.name : '알 수 없음';
-  };
 
 
   const handlePasswordUpdate = (userId) => {
@@ -130,9 +74,9 @@ const AdminDashboard = () => {
       const studentTasks = tasks.filter(t => student.roleIds.includes(t.roleId));
       if (studentTasks.length === 0) return { total: 0, done: 0, percent: 0 };
 
-      // Done = verified AND completed (self)
+      // Done = completed (self-checked) or verified (legacy)
       const doneCount = studentTasks.filter(t => 
-        t.status === 'verified' || (t.type === 'self' && t.status === 'completed')
+        t.status === 'completed' || t.status === 'verified'
       ).length;
       
       const percent = Math.round((doneCount / studentTasks.length) * 100);
@@ -150,7 +94,7 @@ const AdminDashboard = () => {
       <div className="max-w-6xl mx-auto flex justify-between items-center mb-8">
         <div>
           <h1 className="text-3xl font-bold text-gray-800">선생님 대시보드</h1>
-          <p className="text-gray-500">학생들의 역할을 관리하고 업무를 승인해주세요.</p>
+          <p className="text-gray-500">학생들의 역할을 관리하고 활동 현황을 확인하세요.</p>
         </div>
         <div className="flex gap-2 items-center">
             {isEditingAdminPw ? (
@@ -218,19 +162,6 @@ const AdminDashboard = () => {
                 학생 관리
               </div>
             </button>
-            <button
-              onClick={() => setActiveTab('curriculum')}
-              className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all ${
-                activeTab === 'curriculum'
-                  ? 'bg-white text-indigo-600 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              <div className="flex items-center justify-center gap-2">
-                <BookOpen size={18} />
-                교육과정 및 통계
-              </div>
-            </button>
              <button
               onClick={() => setActiveTab('tools')}
               className={`flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all ${
@@ -278,7 +209,7 @@ const AdminDashboard = () => {
             {activeTab === 'management' && (
                 <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8">
                     {/* Student Management Panel */}
-                    <div className="bg-white rounded-xl shadow-sm p-6 overflow-hidden flex flex-col max-h-[85vh]">
+                    <div className="bg-white rounded-xl shadow-sm p-6 overflow-hidden flex flex-col max-h-[85vh] w-full max-w-6xl">
                     <div className="flex justify-between items-center mb-4">
                         <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
                             <div className="w-2 h-8 bg-blue-500 rounded-full"></div>
@@ -363,16 +294,13 @@ const AdminDashboard = () => {
                                             <p className="text-sm text-gray-400 italic">부여된 역할/업무가 없습니다.</p>
                                         ) : (
                                             <div className="space-y-2">
-                                                {tasks.filter(t => student.roleIds?.includes(t.roleId)).map(task => { // Need context tasks
-                                                    let statusColor = "bg-gray-100 text-gray-400"; // Pending self or not started
+                                                {tasks.filter(t => student.roleIds?.includes(t.roleId)).map(task => {
+                                                    let statusColor = "bg-gray-100 text-gray-400"; // Not started
                                                     let statusText = "미완료";
                                                     
-                                                    if (task.status === 'verified' || (task.type === 'self' && task.status === 'completed')) {
+                                                    if (task.status === 'completed' || task.status === 'verified') {
                                                         statusColor = "bg-green-100 text-green-700";
                                                         statusText = "완료됨";
-                                                    } else if (task.status === 'waiting_approval') {
-                                                        statusColor = "bg-yellow-100 text-yellow-700";
-                                                        statusText = "승인 대기";
                                                     }
 
                                                     return (
@@ -481,60 +409,9 @@ const AdminDashboard = () => {
                     </div>
                     </div>
 
-                    {/* Pending Approvals Panel */}
-                    <div className="bg-white rounded-xl shadow-sm p-6 h-fit sticky top-8">
-                    <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-                        <div className="w-2 h-8 bg-yellow-500 rounded-full"></div>
-                        검사 대기중인 업무
-                    </h2>
-                    
-                    {pendingTasks.length === 0 ? (
-                        <div className="text-center py-12 text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                        <CheckCircle2 className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                        <p>훌륭합니다! 밀린 검사가 없습니다.</p>
-                        </div>
-                    ) : (
-                        <div className="space-y-3">
-                        {pendingTasks.map(task => {
-                            const role = roles.find(r => r.id === task.roleId);
-                            const ministry = ministries.find(m => m.id === role?.ministryId);
-                            
-                            return (
-                            <div key={task.id} className="flex items-center justify-between p-4 bg-yellow-50 border border-yellow-100 rounded-lg shadow-sm">
-                                <div>
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${ministry?.color || 'bg-gray-200'}`}>
-                                            {ministry?.name || '부서 미정'}
-                                        </span>
-                                        <span className="text-xs text-gray-500 font-medium">
-                                            - {role?.name} ({getStudentName(task.roleId)})
-                                        </span>
-                                    </div>
-                                <p className="font-bold text-gray-800">{task.text}</p>
-                                </div>
-                                <button
-                                onClick={() => verifyTask(task.id)}
-                                className="flex items-center px-4 py-2 bg-green-500 text-white rounded-lg text-sm font-bold hover:bg-green-600 transition-colors shadow-sm gap-1 hover:shadow-md"
-                                >
-                                <CheckCircle2 className="w-4 h-4" />
-                                참 잘했어요
-                                </button>
-                            </div>
-                            );
-                        })}
-                        </div>
-                    )}
-                    </div>
                 </div>
             )}
 
-            {activeTab === 'curriculum' && (
-                <CurriculumView 
-                    stats={curriculumStats} 
-                    timetables={timetables}
-                    onRefresh={loadCurriculumStats} 
-                />
-            )}
 
             {activeTab === 'tools' && (
                 <div className="space-y-6">
@@ -757,186 +634,6 @@ const AdminDashboard = () => {
   );
 };
 
-
-const CurriculumView = ({ stats, timetables, onRefresh }) => {
-    const { saveTimetable } = useAppContext();
-    const subjects = Object.keys(CURRICULUM_DATA.subjects);
-    const [selectedSubject, setSelectedSubject] = useState(subjects[0]);
-    const [historyModalData, setHistoryModalData] = useState(null); // { unitName, history: [] }
-
-    const subjectData = CURRICULUM_DATA.subjects[selectedSubject];
-    
-    // Flatten units
-    const units = selectedSubject === '사회' 
-        ? subjectData.units.flatMap(major => major.sub_units)
-        : subjectData.units;
-
-    const totalUnits = units.length;
-    const startedUnits = units.filter(u => stats[`${selectedSubject}_${u.name}`]?.count > 0).length;
-    const progressPercent = Math.round((startedUnits / totalUnits) * 100);
-
-    const handleUnitClick = (unitName) => {
-        const key = `${selectedSubject}_${unitName}`;
-        const stat = stats[key];
-        if (stat?.history?.length > 0) {
-            setHistoryModalData({
-                unitName,
-                history: stat.history
-            });
-        }
-    };
-
-    const handleDeleteHistory = async (date, periodIndex) => {
-        if(!window.confirm('정말 이 수업 기록을 삭제하시겠습니까?\n(시간표에서 해당 내용이 지워집니다.)')) return;
-
-        try {
-            // Find full timetable for date
-            const targetEntry = timetables.find(t => t.id === date);
-            if (!targetEntry) return;
-
-            // Create new periods array
-            const newPeriods = [...targetEntry.periods];
-            newPeriods[periodIndex] = ''; // Clear the slot
-
-            // Save
-            await saveTimetable(date, newPeriods);
-            
-            // Close modal if empty or just refresh
-            alert('삭제되었습니다.');
-            setHistoryModalData(null); // Close modal to force refresh consistency
-            onRefresh();
-        } catch (e) {
-            console.error(e);
-            alert('삭제 중 오류가 발생했습니다.');
-        }
-    };
-
-    return (
-        <div className="max-w-6xl mx-auto bg-white rounded-xl shadow-sm p-8 min-h-[600px] relative">
-            <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-                    <BookOpen className="w-6 h-6 text-indigo-500" />
-                    학급 진도 현황표
-                </h2>
-                <div className="text-sm font-bold text-gray-500">
-                    전체 진도율: <span className="text-indigo-600 text-lg">{progressPercent}%</span> ({startedUnits}/{totalUnits})
-                </div>
-            </div>
-
-            {/* Subject Tabs */}
-            <div className="flex gap-2 mb-6 border-b border-gray-100 pb-1">
-                {subjects.map(subject => (
-                    <button
-                        key={subject}
-                        onClick={() => setSelectedSubject(subject)}
-                        className={`px-6 py-3 rounded-t-xl font-bold transition-all relative top-0.5 ${selectedSubject === subject 
-                            ? 'bg-indigo-50 text-indigo-700 border-b-2 border-indigo-500' 
-                            : 'text-gray-400 hover:text-gray-600'}`}
-                    >
-                        {subject}
-                    </button>
-                ))}
-            </div>
-
-            {/* Units Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {units.map((unit, idx) => {
-                    const key = `${selectedSubject}_${unit.name}`;
-                    const stat = stats[key];
-                    const isStarted = stat?.count > 0;
-
-                    return (
-                        <div 
-                            key={idx} 
-                            onClick={() => handleUnitClick(unit.name)}
-                            className={`p-4 rounded-xl border transition-all relative group ${isStarted ? 'border-indigo-200 bg-indigo-50 hover:shadow-md cursor-pointer' : 'border-gray-100 bg-gray-50'}`}
-                        >
-                            <div className="flex justify-between items-start mb-2">
-                                <span className={`text-xs font-bold px-2 py-1 rounded-md ${isStarted ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-200 text-gray-500'}`}>
-                                    {unit.unit || (selectedSubject === '사회' ? '소단원' : '단원')}
-                                </span>
-                                {isStarted && (
-                                    <span className="text-xs font-bold text-green-600 flex items-center gap-1">
-                                        <CheckCircle2 className="w-3 h-3" /> 수업 완료
-                                    </span>
-                                )}
-                            </div>
-                            <h3 className={`font-bold text-lg mb-1 leading-tight ${isStarted ? 'text-gray-800' : 'text-gray-400'}`}>
-                                {unit.name}
-                            </h3>
-                            <p className="text-xs text-gray-500 mb-3 line-clamp-2 h-8">
-                                {unit.sessions}
-                            </p>
-                            
-                            {isStarted ? (
-                                <div className="pt-3 border-t border-indigo-100 flex justify-between items-center text-xs">
-                                    <span className="text-gray-600">마지막 수업: <b>{stat.lastDate}</b></span>
-                                    <span className="text-indigo-500 font-bold">{stat.count}회 기록</span>
-                                </div>
-                            ) : (
-                                <div className="pt-3 border-t border-gray-100 text-xs text-gray-400">
-                                    아직 수업 기록이 없습니다.
-                                </div>
-                            )}
-                            
-                            {isStarted && <div className="absolute inset-0 bg-indigo-500/0 group-hover:bg-indigo-500/5 rounded-xl transition-colors pointer-events-none" />}
-                        </div>
-                    );
-                })}
-            </div>
-
-            {/* History Modal */}
-            {historyModalData && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200" onClick={() => setHistoryModalData(null)}>
-                    <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
-                        <div className="flex justify-between items-center mb-6">
-                            <h3 className="text-xl font-bold text-gray-800">
-                                📖 수업 기록 상세
-                                <span className="block text-sm font-medium text-gray-500 mt-1">{selectedSubject} - {historyModalData.unitName}</span>
-                            </h3>
-                            <button onClick={() => setHistoryModalData(null)} className="p-2 hover:bg-gray-100 rounded-full text-gray-500">
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
-
-                        <div className="space-y-3 max-h-[60vh] overflow-y-auto">
-                            {historyModalData.history.map((record, idx) => (
-                                <div key={idx} className="flex items-start justify-between gap-3 p-4 bg-gray-50 rounded-xl border border-gray-200">
-                                    <div>
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <span className="text-sm font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">
-                                                {record.date}
-                                            </span>
-                                            <span className="text-xs font-bold text-gray-400">
-                                                {record.periodIndex + 1}교시
-                                            </span>
-                                        </div>
-                                        <p className="text-sm text-gray-700 font-medium">
-                                            {record.text}
-                                        </p>
-                                    </div>
-                                    <button 
-                                        onClick={() => handleDeleteHistory(record.date, record.periodIndex)}
-                                        className="p-2 text-red-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                                        title="기록 삭제"
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                    </button>
-                                </div>
-                            ))}
-                        </div>
-
-                        <div className="mt-6 text-right">
-                             <button onClick={() => setHistoryModalData(null)} className="px-5 py-2.5 bg-gray-800 text-white font-bold rounded-xl hover:bg-gray-900">
-                                닫기
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-};
 
 // =====================
 // ADMIN MESSAGE COMPOSER

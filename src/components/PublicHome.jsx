@@ -3,12 +3,15 @@ import { useAppContext } from '../context/AppContext';
 import { Calendar, ClipboardList, Home, Gavel, ScrollText, Search, Briefcase, LogOut, KeyRound, X, Star, ShoppingBag, History, AlertCircle, BellRing, BookOpen, Users } from 'lucide-react';
 import { getLocalDateString } from '../utils/dateUtils';
 import { subscribeToCollection } from '../utils/firebaseUtils';
+import { DEFAULT_TIMETABLE } from '../data/timetableData';
 import StateCouncil from './features/StateCouncil';
 import JudicialSystem from './features/JudicialSystem';
 import ClassWiki from './features/ClassWiki';
 import MyJob from './features/MyJob';
 import FleaMarket from './features/FleaMarket';
 import UserManual from './features/UserManual';
+import ScheduleManager from './features/ScheduleManager';
+import { CalendarDays } from 'lucide-react';
 
 const PublicHome = () => {
   const { subscribeToTimetable, currentUser, logout, updatePassword, scoreShop, getUserScoreSummary, addScoreTransaction, originalAdminId, stopImpersonating, studentNotices, markNoticeRead, ministries, users } = useAppContext();
@@ -30,6 +33,7 @@ const PublicHome = () => {
   const [pwSuccess, setPwSuccess] = useState(false);
   const [showUserManual, setShowUserManual] = useState(false);
   const [showDepartmentModal, setShowDepartmentModal] = useState(false);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
 
   const openPasswordModal = () => {
     setShowPasswordModal(true);
@@ -270,25 +274,45 @@ const PublicHome = () => {
                     </div>
                   )}
 
-                  {/* Periods Section */}
-                  {timetable?.periods?.map((subject, index) => (
-                    <div key={index} className="flex items-center gap-4 group">
-                      <div className="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-center font-black text-gray-400 text-sm group-hover:bg-indigo-100 group-hover:text-indigo-600 transition-colors shrink-0">
-                        {index + 1}
-                      </div>
-                      <div className={`flex-1 px-4 py-3 md:py-4 rounded-2xl font-bold text-base border transition-all ${subject ? 'bg-white border-gray-200 text-gray-800 shadow-sm' : 'bg-gray-50 border-transparent text-gray-400 italic'}`}>
-                        {subject || '수업 없음'}
-                      </div>
-                    </div>
-                  ))}
+                  {(() => {
+                    const now = new Date();
+                    const day = now.getDay(); // 0-6
+                    const defaultPeriods = DEFAULT_TIMETABLE[day] || Array(6).fill('');
+                    
+                    return timetable?.periods?.map((subject, index) => {
+                      const isChanged = subject && defaultPeriods[index] && subject !== defaultPeriods[index];
+                      return (
+                        <div key={index} className="flex items-center gap-4 group">
+                          <div className={`w-12 h-12 md:w-14 md:h-14 rounded-2xl border flex items-center justify-center font-black text-sm transition-colors shrink-0 ${isChanged ? 'bg-orange-50 border-orange-200 text-orange-600' : 'bg-gray-50 border-gray-100 text-gray-400 group-hover:bg-indigo-100 group-hover:text-indigo-600'}`}>
+                            {index + 1}
+                          </div>
+                          <div className={`flex-1 px-4 py-3 md:py-4 rounded-2xl font-bold text-base border transition-all flex items-center justify-between ${isChanged ? 'bg-orange-50/30 border-orange-200 text-gray-800 shadow-sm ring-1 ring-orange-100' : (subject ? 'bg-white border-gray-200 text-gray-800 shadow-sm' : 'bg-gray-50 border-transparent text-gray-400 italic')}`}>
+                            <span>{subject || '수업 없음'}</span>
+                            {isChanged && (
+                              <span className="text-[10px] font-black bg-orange-500 text-white px-2 py-0.5 rounded-md shadow-sm">변경</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
                 </div>
               </div>
 
               {/* 알림장 */}
               <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
-                <div className="bg-orange-50 px-7 py-5 border-b border-orange-100 flex items-center gap-3">
-                  <ClipboardList className="w-6 h-6 text-orange-600" />
-                  <h2 className="text-lg font-bold text-orange-900">알림장</h2>
+                <div className="bg-orange-50 px-7 py-5 border-b border-orange-100 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <ClipboardList className="w-6 h-6 text-orange-600" />
+                    <h2 className="text-lg font-bold text-orange-900">알림장</h2>
+                  </div>
+                  <button 
+                    onClick={() => setShowScheduleModal(true)}
+                    className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl border border-orange-200 text-orange-600 font-bold text-xs hover:bg-orange-100 transition-colors shadow-sm"
+                  >
+                    <CalendarDays className="w-4 h-4" />
+                    일정 확인
+                  </button>
                 </div>
                 <div className="flex-1 flex flex-col p-6 space-y-4 overflow-y-auto">
                   {/* Calculate Pending Items */}
@@ -450,6 +474,26 @@ const PublicHome = () => {
         {/* MARKET TAB */}
         {activeTab === 'market' && <FleaMarket />}
       </main>
+
+      {/* Schedule View Modal */}
+      {showScheduleModal && (
+        <div className="fixed inset-0 z-[100] bg-gray-900/40 backdrop-blur-md flex items-center justify-center p-0 md:p-10 animate-in fade-in zoom-in duration-300">
+          <div className="bg-gray-50 w-full h-full md:rounded-[3rem] shadow-2xl overflow-hidden flex flex-col relative">
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-10">
+              <ScheduleManager isReadOnly={true} onClose={() => setShowScheduleModal(false)} />
+            </div>
+            {/* Mobile Close Button */}
+            <div className="md:hidden p-4 bg-white border-t border-gray-200 safe-area-bottom">
+                <button 
+                  onClick={() => setShowScheduleModal(false)}
+                  className="w-full bg-gray-800 text-white py-4 rounded-2xl font-black text-lg shadow-xl"
+                >
+                  닫기
+                </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* =============== 하단 탭 내비게이션 (태블릿 최적화) =============== */}
       <nav className="fixed bottom-0 inset-x-0 bg-white border-t border-gray-200 z-50 safe-area-bottom">

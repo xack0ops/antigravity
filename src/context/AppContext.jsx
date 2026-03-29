@@ -443,15 +443,8 @@ export const AppProvider = ({ children }) => {
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
 
-    let newStatus = task.status;
-    
-    if (task.type === 'self') {
-      newStatus = task.status === 'completed' ? 'pending' : 'completed';
-    } else {
-      // Admin check type
-      if (task.status === 'pending') newStatus = 'waiting_approval';
-      else if (task.status === 'waiting_approval') newStatus = 'pending'; // Cancel
-    }
+    // Simplified toggle: only pending <-> completed
+    const newStatus = task.status === 'completed' ? 'pending' : 'completed';
 
     // Update Firestore
     const taskRef = doc(db, 'tasks', taskId);
@@ -459,8 +452,10 @@ export const AppProvider = ({ children }) => {
   };
 
   const verifyTask = async (taskId) => {
+    // Keep as no-op or remove if safe, but we found usage in AdminDashboard
+    // For now, let's make it just complete the task since we want everything self-managed
     const taskRef = doc(db, 'tasks', taskId);
-    await updateDoc(taskRef, { status: 'verified' });
+    await updateDoc(taskRef, { status: 'completed' });
   };
 
   const assignStudentRoles = async (userId, ministryId, roleIds) => {

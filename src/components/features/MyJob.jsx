@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../../context/AppContext';
-import { Info, Circle, CheckCircle2, Clock, X, BellRing, Send, Star, BookOpen, Wallet } from 'lucide-react';
+import { Info, Circle, CheckCircle2, X, BellRing, Send, Star, BookOpen, Wallet } from 'lucide-react';
 import ScoreManager from './ScoreManager';
 import LifeNoteManager from './LifeNoteManager';
 import AssignmentManager from './AssignmentManager';
@@ -526,23 +526,15 @@ const MyJob = ({ onNavigate }) => {
 
 const TaskItem = ({ task, toggleTask, onNavigate }) => {
     const isCompleted = task.status === 'completed' || task.status === 'verified';
-    const isPending = task.status === 'waiting_approval';
-    const isAdminTask = task.type === 'admin';
   
     let borderClass = "border-gray-200";
     let bgClass = "bg-white";
-    let icon = <Circle className="w-6 h-6 text-gray-300" />;
     let textClass = "text-gray-800";
   
     if (isCompleted) {
       borderClass = "border-green-200";
       bgClass = "bg-green-50";
-      icon = <CheckCircle2 className="w-6 h-6 text-green-500" />;
       textClass = "text-gray-400 line-through";
-    } else if (isPending) {
-      borderClass = "border-yellow-200";
-      bgClass = "bg-yellow-50";
-      icon = <Clock className="w-6 h-6 text-yellow-500 animate-pulse" />;
     }
   
     const handleClick = () => {
@@ -550,7 +542,7 @@ const TaskItem = ({ task, toggleTask, onNavigate }) => {
       toggleTask(task.id);
     };
   
-    const showAction = task.action || ['t3', 't10', 't11'].includes(task.id);
+    const showAction = !!task.action;
 
     return (
       <div 
@@ -563,26 +555,18 @@ const TaskItem = ({ task, toggleTask, onNavigate }) => {
         <div onClick={!isCompleted ? handleClick : undefined} className="shrink-0 cursor-pointer p-1">
           {isCompleted
             ? <CheckCircle2 className="w-8 h-8 text-green-500" />
-            : isPending
-              ? <Clock className="w-8 h-8 text-yellow-500 animate-pulse" />
-              : <Circle className="w-8 h-8 text-gray-300" />}
+            : <Circle className="w-8 h-8 text-gray-300" />}
         </div>
-        <div className="flex-1">
+        <div className="flex-1 text-left">
           <p onClick={!isCompleted ? handleClick : undefined} className={`font-bold text-lg md:text-xl ${textClass} cursor-pointer leading-snug`}>
             {task.text}
           </p>
           
           <div className="flex justify-between items-center mt-2">
               <div className="flex gap-2">
-                {isAdminTask ? (
-                    <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${isCompleted ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
-                        {isCompleted ? '선생님 확인 완료' : (isPending ? '검사 대기중...' : '선생님 확인 필요')}
-                    </span>
-                ) : (
-                    <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${isCompleted ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                    <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${isCompleted ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500 font-medium'}`}>
                         {isCompleted ? '완료됨' : '스스로 체크'}
                     </span>
-                )}
               </div>
 
                {showAction && (
@@ -590,7 +574,7 @@ const TaskItem = ({ task, toggleTask, onNavigate }) => {
                     onClick={(e) => {
                         e.stopPropagation();
                         if (onNavigate) {
-                            if (task.action === 'open_judicial' || ['t3', 't10', 't11'].includes(task.id)) {
+                            if (task.action === 'open_judicial') {
                                 onNavigate('judicial');
                             } else if (task.action === 'open_petition') {
                                 onNavigate('petition');
